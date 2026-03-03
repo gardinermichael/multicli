@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getCatalog, formatCatalog } from '../src/modelCatalog.js';
+import { TIER_CONFIG, CLI_NOTES } from '../src/tierConfig.js';
 
 // ===========================================================================
 // getCatalog
@@ -84,5 +85,43 @@ describe('formatCatalog', () => {
     expect(formatted).toContain('[FAST]');
     expect(formatted).toContain('[BALANCED]');
     expect(formatted).toContain('[POWERFUL]');
+  });
+});
+
+// ===========================================================================
+// tierConfig
+// ===========================================================================
+
+describe('tierConfig', () => {
+  const clis = ['claude', 'gemini', 'codex'] as const;
+  const tiers = ['fast', 'balanced', 'powerful'] as const;
+
+  it.each(clis)('should have config for all three tiers for "%s"', (cli) => {
+    for (const tier of tiers) {
+      const config = TIER_CONFIG[cli][tier];
+      expect(config).toBeDefined();
+      expect(config.label).toBeTruthy();
+      expect(config.useWhen).toBeTruthy();
+    }
+  });
+
+  it.each(clis)('should have a note for "%s"', (cli) => {
+    expect(CLI_NOTES[cli]).toBeTruthy();
+    expect(typeof CLI_NOTES[cli]).toBe('string');
+  });
+
+  it.each(clis)('should have "DEFAULT" in the fast tier label for "%s"', (cli) => {
+    expect(TIER_CONFIG[cli].fast.label).toContain('DEFAULT');
+  });
+
+  it('tierConfig labels should match catalog labels', () => {
+    for (const cli of clis) {
+      const catalog = getCatalog(cli);
+      for (const tier of catalog.tiers) {
+        const tierName = tier.tier as typeof tiers[number];
+        expect(tier.label).toBe(TIER_CONFIG[cli][tierName].label);
+        expect(tier.useWhen).toBe(TIER_CONFIG[cli][tierName].useWhen);
+      }
+    }
   });
 });

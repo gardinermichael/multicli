@@ -8,7 +8,7 @@
     "multicli": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -f src/modelCatalog.generated.json dist/ 2>/dev/null || true",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "test": "vitest run",
@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
     "prepublishOnly": "echo '⚠️  Remember to test locally first!' && npm run build",
+    "refresh-catalog": "npx tsx scripts/refresh-catalog.ts",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "prepare": "husky || true"

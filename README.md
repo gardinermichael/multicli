@@ -1,4 +1,4 @@
-# Osano AI - Multi CLI MCP
+# Multi-CLI MCP
 
 [![npm version](https://img.shields.io/npm/v/@osanoai/multicli?color=cb0000)](https://www.npmjs.com/package/@osanoai/multicli)
 [![Tests](https://img.shields.io/github/actions/workflow/status/osanoai/multicli/tests.yml?branch=main&label=tests)](https://github.com/osanoai/multicli/actions/workflows/tests.yml)
@@ -7,15 +7,25 @@
 [![Node](https://img.shields.io/node/v/@osanoai/multicli)](https://www.npmjs.com/package/@osanoai/multicli)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-**The AI collab no one asked for, but everyone needed.**
-
-An MCP server that lets Claude, Gemini, and Codex call each other as tools. Because why argue about which AI is best when you can make them work together?
+**An MCP server that lets Claude, Gemini, and Codex call each other as tools.**
 
 ```
 Claude: "Hey Gemini, what do you think about this code?"
 Gemini: "It's mass. Let me ask Codex for a second opinion."
 Codex:  "You're both wrong. Here's the fix."
 ```
+
+---
+
+## One-Line Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/osanoai/multicli/main/install.sh | bash
+```
+
+Detects which AI CLIs you have installed and configures Multi-CLI for all of them automatically. No config files, no API keys, no environment variables. If it's on your PATH, it works.
+
+---
 
 ## What It Does
 
@@ -27,41 +37,53 @@ Multi-CLI sits between your AI clients and bridges them via the [Model Context P
 - Each client's own tools are hidden (no talking to yourself, that's weird)
 - Auto-detects which CLIs you have installed — only shows what's available
 
+---
+
+## The Meta Part
+
+This tool was built by the very AIs it connects.
+
+Claude, Gemini, and Codex wrote the code. Claude, Gemini, and Codex maintain it. Every week, all three AIs run a scheduled job that queries each CLI for its current model list, diffs the results against what's in the repo, and opens a PR if anything changed. New model releases get picked up automatically. Deprecated models get cleaned out. The repo stays current without anyone touching it.
+
+Most MCP tools go stale within weeks. This one is self-maintaining by design.
+
+---
+
 ## Prerequisites
 
 You need **Node.js >= 20** and at least **two** of these CLIs installed:
 
 | CLI | Install |
 |-----|---------|
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) | `npm install -g @anthropic-ai/claude-code` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `npm install -g @google/gemini-cli` |
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
 
 > Why two? Because one AI talking to itself is a monologue, not a collaboration.
 
 ---
 
-## Installation
+## Manual Installation
+
+Prefer to install per-client yourself? Each command is one line.
 
 ### Claude Code
 
 ```bash
-claude mcp add Multi-CLI -- npx -y @osanoai/multicli
+claude mcp add Multi-CLI -- npx -y @osanoai/multicli@latest
 ```
-
-That's it. Restart Claude Code and Gemini + Codex tools appear automatically.
 
 <details>
 <summary>Claude Desktop (JSON config)</summary>
 
-Add to your config file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS:
 
 ```json
 {
   "mcpServers": {
     "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "@osanoai/multicli"]
+      "args": ["-y", "@osanoai/multicli@latest"]
     }
   }
 }
@@ -75,10 +97,8 @@ Restart Claude Desktop completely after saving.
 ### Gemini CLI
 
 ```bash
-gemini mcp add --scope user Multi-CLI npx -y @osanoai/multicli
+gemini mcp add --scope user Multi-CLI npx -y @osanoai/multicli@latest
 ```
-
-Restart the Gemini CLI and Claude + Codex tools will be available.
 
 <details>
 <summary>Manual config (~/.gemini/settings.json)</summary>
@@ -88,7 +108,7 @@ Restart the Gemini CLI and Claude + Codex tools will be available.
   "mcpServers": {
     "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "@osanoai/multicli"]
+      "args": ["-y", "@osanoai/multicli@latest"]
     }
   }
 }
@@ -100,10 +120,8 @@ Restart the Gemini CLI and Claude + Codex tools will be available.
 ### Codex CLI
 
 ```bash
-codex mcp add Multi-CLI -- npx -y @osanoai/multicli
+codex mcp add Multi-CLI -- npx -y @osanoai/multicli@latest
 ```
-
-Restart Codex and Claude + Gemini tools will be available.
 
 <details>
 <summary>Manual config (~/.codex/config.toml) or pass --mcp-config</summary>
@@ -119,7 +137,7 @@ Where `mcp.json` contains:
   "mcpServers": {
     "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "@osanoai/multicli"]
+      "args": ["-y", "@osanoai/multicli@latest"]
     }
   }
 }
@@ -133,7 +151,7 @@ Where `mcp.json` contains:
 Multi-CLI uses standard stdio transport. If your client supports MCP, point it at:
 
 ```
-npx -y @osanoai/multicli
+npx -y @osanoai/multicli@latest
 ```
 
 ---
@@ -155,6 +173,8 @@ Once connected, your AI client gains access to tools for the *other* CLIs (never
 | `Ask Claude` | Ask Claude a question or give it a task |
 | `Claude Help` | Get Claude Code CLI help info |
 
+---
+
 ## Usage Examples
 
 Once installed, just talk naturally to your AI:
@@ -173,13 +193,15 @@ Or get a second opinion on anything:
  ask Gemini and Codex what they'd do differently"
 ```
 
+---
+
 ## How It Works
 
 ```
-┌─────────────┐     MCP (stdio)     ┌──────────────┐     CLI calls     ┌─────────────┐
-│  Your AI    │ ◄──────────────────► │ Multi-CLI │ ───────────────► │ Other AIs   │
-│  Client     │                      │   server     │                   │ (CLI tools) │
-└─────────────┘                      └──────────────┘                   └─────────────┘
+┌─────────────┐     MCP (stdio)      ┌──────────────┐     CLI calls    ┌─────────────┐
+│  Your AI    │ ◄──────────────────► │  Multi-CLI   │ ───────────────► │ Other AIs   │
+│  Client     │                      │   server     │                  │ (CLI tools) │
+└─────────────┘                      └──────────────┘                  └─────────────┘
 
 1. Your AI client connects to Multi-CLI via MCP
 2. Multi-CLI detects which CLIs are installed on your system
@@ -187,6 +209,8 @@ Or get a second opinion on anything:
 4. When a tool is called, Multi-CLI executes the corresponding CLI command
 5. Results flow back through MCP to your AI client
 ```
+
+---
 
 ## Troubleshooting
 
@@ -201,8 +225,10 @@ If only your own CLI is installed, Multi-CLI hides it (no self-calls). Install a
 
 **MCP server not responding?**
 1. Check that Node.js >= 20 is installed
-2. Run `npx @osanoai/multicli` directly to see if it starts
+2. Run `npx @osanoai/multicli@latest` directly to see if it starts
 3. Restart your AI client completely
+
+---
 
 ## Development
 
@@ -213,4 +239,3 @@ npm install
 npm run build
 npm run dev
 ```
-

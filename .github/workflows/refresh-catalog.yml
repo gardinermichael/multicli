@@ -1,0 +1,77 @@
+name: Refresh Model Catalog
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  refresh:
+    name: Refresh model catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CLIs
+        run: |
+          npm install -g @anthropic-ai/claude-code @google/gemini-cli codex
+        continue-on-error: true
+
+      - name: Refresh catalog
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx tsx scripts/refresh-catalog.ts
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet src/modelCatalog.generated.json 2>/dev/null; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No model catalog changes detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Model catalog has changed"
+          fi
+
+      - name: Create changeset
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          {
+            echo '---'
+            echo '"@osanoai/multicli": patch'
+            echo '---'
+            echo ''
+            echo 'Refresh model catalog with latest available models from CLIs'
+          } > .changeset/auto-catalog-refresh.md
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'chore: refresh model catalog'
+          title: 'chore: refresh model catalog'
+          body: |
+            Automated weekly refresh of the model catalog.
+
+            The CLIs were queried for their current available models and
+            `src/modelCatalog.generated.json` has been updated.
+
+            Please review the changes to ensure the model list looks correct.
+          branch: chore/refresh-model-catalog
+          delete-branch: true
+          labels: automated
