@@ -1,0 +1,12 @@
+# Typecheck — block commit on failure
+npm run lint
+
+# Warn if no changeset exists (non-blocking)
+CHANGESET_COUNT=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$CHANGESET_COUNT" = "0" ]; then
+  echo ""
+  echo "\033[33mWarning: No changeset found.\033[0m"
+  echo "  If this commit introduces user-facing changes,"
+  echo "  run \`npx changeset\` to create one."
+  echo ""
+fi
