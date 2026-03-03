@@ -1,39 +1,210 @@
-name: Release
+name: Release & Publish
 
 on:
   push:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Changesets
+  check:
+    name: Check if release needed
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - name: Skip automated version commits
+        id: check
+        run: |
+          COMMIT_MSG=$(cat << 'HEREDOC'
+          ${{ github.event.head_commit.message }}
+          HEREDOC
+          )
+          if echo "$COMMIT_MSG" | head -1 | grep -q "^chore: version packages"; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "Skipping: automated version bump commit"
+          else
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
+  verify-security:
+    name: Verify Security Scans Passed
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
+    steps:
+      - name: Verify scan.yml passed for this commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const sha = context.sha;
+            console.log(`Checking scan workflow for commit: ${sha}`);
+
+            const workflows = await github.rest.actions.listRepoWorkflows({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const scanWorkflow = workflows.data.workflows.find(
+              w => w.path === '.github/workflows/scan.yml'
+            );
+            if (!scanWorkflow) {
+              core.setFailed('scan.yml workflow not found in this repository.');
+              return;
+            }
+
+            const maxAttempts = 10;
+            const delayMs = 30000;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: scanWorkflow.id,
+                head_sha: sha,
+                per_page: 1,
+              });
+
+              if (runs.data.total_count > 0) {
+                const run = runs.data.workflow_runs[0];
+                if (run.status === 'completed') {
+                  if (run.conclusion === 'success') {
+                    console.log(`Security scan passed (run #${run.run_number}).`);
+                    return;
+                  } else {
+                    core.setFailed(
+                      `Security scan failed with conclusion "${run.conclusion}". ` +
+                      `Fix security issues before publishing.`
+                    );
+                    return;
+                  }
+                }
+                console.log(
+                  `Scan still running (attempt ${attempt}/${maxAttempts}, ` +
+                  `status: ${run.status})... waiting ${delayMs / 1000}s`
+                );
+              } else {
+                console.log(
+                  `No scan run found for SHA ${sha.slice(0, 7)} ` +
+                  `(attempt ${attempt}/${maxAttempts})... waiting ${delayMs / 1000}s`
+                );
+              }
+
+              if (attempt < maxAttempts) {
+                await new Promise(r => setTimeout(r, delayMs));
+              }
+            }
+
+            core.setFailed(
+              'Security scan did not complete within the timeout window. ' +
+              'Push to main and wait for scan.yml to pass before creating a release.'
+            );
+
+  release:
+    name: Version, Publish & Release
+    needs: [check, verify-security]
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
       contents: write
-      pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
-      - run: npm ci
+      - name: Verify npm supports OIDC
+        run: |
+          NPM_VERSION=$(npm --version)
+          echo "npm version: $NPM_VERSION"
+          MAJOR=$(echo "$NPM_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$NPM_VERSION" | cut -d. -f2)
+          if [ "$MAJOR" -lt 11 ] || ([ "$MAJOR" -eq 11 ] && [ "$MINOR" -lt 5 ]); then
+            echo "::error::npm >= 11.5.1 required for OIDC. Found: $NPM_VERSION"
+            exit 1
+          fi
+          echo "npm version $NPM_VERSION supports OIDC trusted publishing."
 
-      - uses: changesets/action@v1
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (type-check)
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Auto-create patch changeset if none exists
+        run: |
+          COUNT=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$COUNT" = "0" ]; then
+            echo "No changesets found — creating automatic patch bump"
+            {
+              echo '---'
+              echo '"@osanoai/multicli": patch'
+              echo '---'
+              echo ''
+              echo 'Automatic patch version bump'
+            } > .changeset/auto-ci-patch.md
+          fi
+
+      - name: Version packages
+        run: npx changeset version
+
+      - name: Check for version change
+        id: version
+        run: |
+          if git diff --quiet package.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No version change detected"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "New version: v$VERSION"
+          fi
+
+      - name: Commit and tag
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore: version packages v${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push --follow-tags
+
+      - name: Rebuild with updated version
+        if: steps.version.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Publish to npm with provenance
+        if: steps.version.outputs.changed == 'true'
+        run: npm publish --provenance --access public
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/github-script@v8
         with:
-          version: npm run version-packages
-          publish: npx changeset tag
-          commit: "chore: version packages"
-          title: "chore: version packages"
-          createGithubReleases: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${{ steps.version.outputs.version }}`,
+              name: `v${{ steps.version.outputs.version }}`,
+              generate_release_notes: true,
+            });
