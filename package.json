@@ -56,21 +56,11 @@
     "@changesets/cli": "^2.30.0",
     "@types/node": "^25.3.3",
     "@vitest/coverage-v8": "^4.0.18",
-    "mermaid": "^11.12.3",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitepress": "^1.6.4",
-    "vitepress-plugin-mermaid": "^2.0.17",
     "vitest": "^4.0.18"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
-  },
-  "overrides": {
-    "vitepress": {
-      "vite": "^5.4.21"
-    },
-    "esbuild": "^0.25.0"
   }
 }

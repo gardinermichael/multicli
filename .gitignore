@@ -34,10 +34,6 @@ logs/
 *.tmp
 .cache/
 
-# VitePress
-docs/.vitepress/cache/
-docs/.vitepress/dist/
-
 # Agents
 .claude
 .gemini

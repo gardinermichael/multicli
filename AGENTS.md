@@ -84,8 +84,6 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 - `npm run dev` — build then run (`tsc && node dist/index.js`)
 - `npm start` — run compiled server (`node dist/index.js`)
 - `npm run lint` — type-check without emitting (`tsc --noEmit`)
-- `npm run docs:dev` — local VitePress docs server
-- `npm run docs:build` — build static docs site
 - `npm run changeset` — create a changeset file (required before committing source changes)
 - `npm run version-packages` — consume changesets and bump version (CI only)
 
@@ -104,7 +102,6 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 - **Language**: TypeScript 5.x (strict mode, target ES2022, module Node16)
 - **Core dependency**: `@modelcontextprotocol/sdk` — MCP server + stdio transport
 - **Validation**: `zod` for tool argument schemas
-- **Docs**: VitePress with Mermaid plugin
 - **Architecture**: Tool registry pattern — each tool in `src/tools/` exports a definition + executor. `src/index.ts` wires the MCP server, request handlers, and progress notifications.
 
 # Authorship
