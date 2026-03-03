@@ -39,9 +39,14 @@ jobs:
       contents: read
       actions: read
 
+  test:
+    name: Tests
+    needs: scan
+    uses: ./.github/workflows/tests.yml
+
   release:
     name: Version, Publish & Release
-    needs: [check, scan]
+    needs: [check, test]
     if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -74,15 +79,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Lint (type-check)
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
 
       - name: Auto-create patch changeset if none exists
         run: |
