@@ -59,6 +59,17 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 5. **Document Results**: Add review section to `tasks/todo.md`
 6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
 
+### 8. Changesets Required
+- **Every commit that changes source code, dependencies, or configuration MUST include a changeset file.**
+- Run `npm run changeset` before committing. Select the appropriate bump type:
+  - `patch` — bug fixes, dependency updates, code quality improvements
+  - `minor` — new features, new tools, new optional parameters
+  - `major` — breaking changes to tool schemas, removed tools, changed protocol behavior
+- Write a concise summary describing what changed and why (this becomes the CHANGELOG entry).
+- The changeset file (`.changeset/*.md`) must be committed alongside the code changes, not in a separate commit.
+- The only exceptions where a changeset is NOT required: changes that are purely internal to CI/CD workflows, documentation-only changes (README, AGENTS.md), or test-only changes with no source modifications.
+- **Never manually edit `package.json` version** — changesets handles version bumps automatically via the Version Packages PR.
+
 ## Core Principles
 
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
@@ -75,6 +86,8 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 - `npm run lint` — type-check without emitting (`tsc --noEmit`)
 - `npm run docs:dev` — local VitePress docs server
 - `npm run docs:build` — build static docs site
+- `npm run changeset` — create a changeset file (required before committing source changes)
+- `npm run version-packages` — consume changesets and bump version (CI only)
 
 ## Testing
 
