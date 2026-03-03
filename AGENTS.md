@@ -4,7 +4,7 @@ This file provides guidance to Claude Code, Google Gemini, OpenAI Codex, and oth
 
 ## Project Overview
 
-Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claude, Gemini, Codex) call each other as tools. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio transport. Published to npm as `multicli
+Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claude, Gemini, Codex) call each other as tools. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio transport. Published to npm as `@osanoai/multicli
 
 ## Workflow Orchestration
 
@@ -78,13 +78,24 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 
 ## Testing
 
-No test framework is configured yet. `npm test` is a no-op placeholder. When adding tests, pick a runner (e.g., vitest) and wire it into the `test` script.
+- `npm test` — run all tests (`vitest run`)
+- `npm run test:watch` — run tests in watch mode (`vitest`)
+- `npm run test:coverage` — run tests with coverage (`vitest run --coverage`)
+- **Framework**: Vitest 4.x with globals enabled
+- **Test files**: `tests/**/*.test.ts` (12 files, 138 tests)
+- **Mocking**: `vi.mock()` for fs/os/child_process; pure-logic modules tested without mocks
 
 ## Framework
 
-- **Runtime**: Node.js >=18, ESM (`"type": "module"`)
+- **Runtime**: Node.js >=20, ESM (`"type": "module"`)
 - **Language**: TypeScript 5.x (strict mode, target ES2022, module Node16)
 - **Core dependency**: `@modelcontextprotocol/sdk` — MCP server + stdio transport
 - **Validation**: `zod` for tool argument schemas
 - **Docs**: VitePress with Mermaid plugin
 - **Architecture**: Tool registry pattern — each tool in `src/tools/` exports a definition + executor. `src/index.ts` wires the MCP server, request handlers, and progress notifications.
+
+# Authorship
+All PRs and Commits to this repository must include a reference to "Claude, Codex, and Gemini" as the authors.
+
+# Symlinks
+CLAUDE.md and GEMINI.md and CODEX.md are symlinks to AGENTS.md - AGENTS.md is the only file that should ever be edited.
