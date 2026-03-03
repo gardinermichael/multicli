@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Shai-Hulud 2.0 Detector
-        uses: gensecaihq/Shai-Hulud-2.0-Detector@75b20a130d6c16aa1f973b27ea07d076c931acfc # v1
+        uses: gensecaihq/Shai-Hulud-2.0-Detector@85d0ad15eed5c2274e5606949735b59751a0bc61 # v2
         with:
           fail-on-critical: true
           fail-on-high: true
