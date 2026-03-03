@@ -1,0 +1,62 @@
+{
+  "name": "multicli",
+  "version": "1.5.0",
+  "description": "MCP server for multi-CLI AI integration (Gemini + Codex)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "multicli": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "echo \"No tests yet\" && exit 0",
+    "lint": "tsc --noEmit",
+    "contribute": "tsx src/contribute.ts",
+    "prepublishOnly": "echo '⚠️  Remember to test locally first!' && npm run build",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "gemini",
+    "cli",
+    "ai",
+    "llm"
+  ],
+  "author": "arlogilbert",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/osanoai/multicli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/osanoai/multicli/issues"
+  },
+  "homepage": "https://github.com/osanoai/multicli#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "dotenv": "^17.3.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "mermaid": "^11.12.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
