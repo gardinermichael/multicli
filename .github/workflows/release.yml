@@ -29,83 +29,19 @@ jobs:
             echo "should_release=true" >> $GITHUB_OUTPUT
           fi
 
-  verify-security:
-    name: Verify Security Scans Passed
+  scan:
+    name: Security Scan
     needs: check
     if: needs.check.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    uses: ./.github/workflows/scan.yml
     permissions:
+      security-events: write
+      contents: read
       actions: read
-    steps:
-      - name: Verify scan.yml passed for this commit
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const sha = context.sha;
-            console.log(`Checking scan workflow for commit: ${sha}`);
-
-            const workflows = await github.rest.actions.listRepoWorkflows({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const scanWorkflow = workflows.data.workflows.find(
-              w => w.path === '.github/workflows/scan.yml'
-            );
-            if (!scanWorkflow) {
-              core.setFailed('scan.yml workflow not found in this repository.');
-              return;
-            }
-
-            const maxAttempts = 10;
-            const delayMs = 30000;
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              const runs = await github.rest.actions.listWorkflowRuns({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: scanWorkflow.id,
-                head_sha: sha,
-                per_page: 1,
-              });
-
-              if (runs.data.total_count > 0) {
-                const run = runs.data.workflow_runs[0];
-                if (run.status === 'completed') {
-                  if (run.conclusion === 'success') {
-                    console.log(`Security scan passed (run #${run.run_number}).`);
-                    return;
-                  } else {
-                    core.setFailed(
-                      `Security scan failed with conclusion "${run.conclusion}". ` +
-                      `Fix security issues before publishing.`
-                    );
-                    return;
-                  }
-                }
-                console.log(
-                  `Scan still running (attempt ${attempt}/${maxAttempts}, ` +
-                  `status: ${run.status})... waiting ${delayMs / 1000}s`
-                );
-              } else {
-                console.log(
-                  `No scan run found for SHA ${sha.slice(0, 7)} ` +
-                  `(attempt ${attempt}/${maxAttempts})... waiting ${delayMs / 1000}s`
-                );
-              }
-
-              if (attempt < maxAttempts) {
-                await new Promise(r => setTimeout(r, delayMs));
-              }
-            }
-
-            core.setFailed(
-              'Security scan did not complete within the timeout window. ' +
-              'Push to main and wait for scan.yml to pass before creating a release.'
-            );
 
   release:
     name: Version, Publish & Release
-    needs: [check, verify-security]
+    needs: [check, scan]
     if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
