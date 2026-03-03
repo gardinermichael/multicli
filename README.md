@@ -22,7 +22,7 @@ Multi-CLI sits between your AI clients and bridges them via the [Model Context P
 
 ## Prerequisites
 
-You need **Node.js >= 18** and at least **two** of these CLIs installed:
+You need **Node.js >= 20** and at least **two** of these CLIs installed:
 
 | CLI | Install |
 |-----|---------|
@@ -39,7 +39,7 @@ You need **Node.js >= 18** and at least **two** of these CLIs installed:
 ### Claude Code
 
 ```bash
-claude mcp add "Multi-CLI" -- npx -y "Multi-CLI"
+claude mcp add Multi-CLI -- npx -y @osanoai/multicli
 ```
 
 That's it. Restart Claude Code and Gemini + Codex tools appear automatically.
@@ -52,9 +52,9 @@ Add to your config file (`~/Library/Application Support/Claude/claude_desktop_co
 ```json
 {
   "mcpServers": {
-    "multicli-mcp": {
+    "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "multicli-mcp"]
+      "args": ["-y", "@osanoai/multicli"]
     }
   }
 }
@@ -68,7 +68,7 @@ Restart Claude Desktop completely after saving.
 ### Gemini CLI
 
 ```bash
-gemini mcp add --scope user multicli-mcp npx -y multicli-mcp
+gemini mcp add --scope user Multi-CLI npx -y @osanoai/multicli
 ```
 
 Restart the Gemini CLI and Claude + Codex tools will be available.
@@ -79,9 +79,9 @@ Restart the Gemini CLI and Claude + Codex tools will be available.
 ```json
 {
   "mcpServers": {
-    "multicli-mcp": {
+    "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "multicli-mcp"]
+      "args": ["-y", "@osanoai/multicli"]
     }
   }
 }
@@ -93,7 +93,7 @@ Restart the Gemini CLI and Claude + Codex tools will be available.
 ### Codex CLI
 
 ```bash
-codex mcp add multicli-mcp -- npx -y multicli-mcp
+codex mcp add Multi-CLI -- npx -y @osanoai/multicli
 ```
 
 Restart Codex and Claude + Gemini tools will be available.
@@ -112,7 +112,7 @@ Where `mcp.json` contains:
   "mcpServers": {
     "Multi-CLI": {
       "command": "npx",
-      "args": ["-y", "multicli"]
+      "args": ["-y", "@osanoai/multicli"]
     }
   }
 }
@@ -126,7 +126,7 @@ Where `mcp.json` contains:
 Multi-CLI uses standard stdio transport. If your client supports MCP, point it at:
 
 ```
-npx -y multicli
+npx -y @osanoai/multicli
 ```
 
 ---
@@ -193,8 +193,8 @@ which gemini && which codex && which claude
 If only your own CLI is installed, Multi-CLI hides it (no self-calls). Install a *different* CLI to enable cross-model collaboration.
 
 **MCP server not responding?**
-1. Check that Node.js >= 18 is installed
-2. Run `npx multicli` directly to see if it starts
+1. Check that Node.js >= 20 is installed
+2. Run `npx @osanoai/multicli` directly to see if it starts
 3. Restart your AI client completely
 
 ## Development
