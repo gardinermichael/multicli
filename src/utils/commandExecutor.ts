@@ -3,14 +3,31 @@ import { spawn } from "child_process";
 // Detect Windows platform for shell compatibility
 const isWindows = process.platform === "win32";
 
+/**
+ * Sanitize a single argument for safe use with cmd.exe (shell: true on Windows).
+ * Uses correct cmd.exe escaping conventions:
+ *   - `""` for literal double quotes (cmd.exe convention, not `\"`)
+ *   - `%%` for literal percent signs (prevents env variable expansion)
+ *   - `^` prefix for cmd.exe operators: & | < > ^
+ */
+export function sanitizeArgForCmd(arg: string): string {
+  return arg
+    .replace(/"/g, '""')               // cmd.exe double-quote escaping
+    .replace(/%/g, '%%')               // prevent %VAR% expansion
+    .replace(/[&|<>^]/g, c => `^${c}`) // caret-escape shell operators
+  ;
+}
+
 export async function executeCommand(
   command: string,
   args: string[],
   onProgress?: (newOutput: string) => void
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Use shell: true on Windows to properly execute .cmd files and resolve PATH
-    const childProcess = spawn(command, args, {
+    // Use shell: true on Windows to properly execute .cmd files and resolve PATH.
+    // Sanitize args to prevent cmd.exe metacharacter injection.
+    const safeArgs = isWindows ? args.map(sanitizeArgForCmd) : args;
+    const childProcess = spawn(command, safeArgs, {
       env: process.env,
       shell: isWindows,
       stdio: ["ignore", "pipe", "pipe"],
