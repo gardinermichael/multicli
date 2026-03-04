@@ -1,5 +1,11 @@
 # @osanoai/multicli
 
+## 1.5.6
+
+### Patch Changes
+
+- Automatic patch version bump
+
 ## 1.5.5
 
 ### Patch Changes
