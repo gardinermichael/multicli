@@ -3,6 +3,7 @@ name: Release & Publish
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release
@@ -23,15 +24,21 @@ jobs:
       - name: Check for version change
         id: decide
         run: |
-          OLD=$(git show HEAD~1:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
           NEW=$(grep '"version"' package.json | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/')
-          if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_release=true" >> $GITHUB_OUTPUT
             echo "version=$NEW" >> $GITHUB_OUTPUT
-            echo "Version changed: $OLD -> $NEW"
+            echo "Manual dispatch — releasing $NEW"
           else
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "No version change detected ($NEW)"
+            OLD=$(git show HEAD~1:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
+            if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "version=$NEW" >> $GITHUB_OUTPUT
+              echo "Version changed: $OLD -> $NEW"
+            else
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "No version change detected ($NEW)"
+            fi
           fi
 
   scan:
