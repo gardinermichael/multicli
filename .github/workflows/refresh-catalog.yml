@@ -29,7 +29,7 @@ jobs:
 
       - name: Install CLIs (no lifecycle scripts to prevent secret exfiltration)
         run: |
-          npm install -g --ignore-scripts @anthropic-ai/claude-code @google/gemini-cli codex
+          npm install -g --ignore-scripts @anthropic-ai/claude-code @google/gemini-cli @openai/codex
         continue-on-error: true
 
       - name: Refresh catalog
