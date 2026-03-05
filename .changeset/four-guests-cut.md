@@ -2,4 +2,4 @@
 "@osanoai/multicli": patch
 ---
 
-Added progress text to the MCP output
+Improved MCP output progress reporting with rotating status messages and reduced the keepalive interval for more responsive heartbeats

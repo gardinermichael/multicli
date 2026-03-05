@@ -83,23 +83,23 @@ async function sendProgressNotification(
 }
 
 interface ProgressData {
-  interval?: NodeJS.Timeout;
+  timeout?: NodeJS.Timeout;
   progressToken?: string | number;
   operationName: string;
   completed: boolean;
 }
 
-function startProgressUpdates(
+async function startProgressUpdates(
   operationName: string,
   progressToken?: string | number
-): ProgressData {
+): Promise<ProgressData> {
   const progressData: ProgressData = {
     operationName,
     progressToken,
     completed: false
   };
 
-  // If no progress token provided, return minimal data without starting an interval
+  // If no progress token provided, return minimal data without starting a loop
   if (progressToken === undefined || progressToken === null) {
     return progressData;
   }
@@ -120,32 +120,41 @@ function startProgressUpdates(
   let messageIndex = 0;
   let progress = 0;
   
-  // Send immediate acknowledgment
-  sendProgressNotification(
+  // Send immediate acknowledgment and wait for it to ensure correct ordering
+  await sendProgressNotification(
     progressToken,
     0,
     undefined, // No total - indeterminate progress
     `🔍 Starting ${operationName}`
   );
   
-  // Keep client alive with periodic updates
-  progressData.interval = setInterval(async () => {
-    if (progressData.completed) return;
+  // Self-scheduling loop instead of setInterval to prevent overlap and races
+  const scheduleNext = () => {
+    progressData.timeout = setTimeout(async () => {
+      if (progressData.completed) return;
 
-    // Simply increment progress value
-    progress += 1;
-    
-    // Use standard progress message from rotation
-    const message = progressMessages[messageIndex % progressMessages.length];
-    
-    await sendProgressNotification(
-      progressToken,
-      progress,
-      undefined, // No total - indeterminate progress
-      message
-    );
-    messageIndex++;
-  }, PROTOCOL.KEEPALIVE_INTERVAL); // Every 10 seconds
+      // Simply increment progress value
+      progress += 1;
+      
+      // Use standard progress message from rotation
+      const message = progressMessages[messageIndex % progressMessages.length];
+      
+      await sendProgressNotification(
+        progressToken,
+        progress,
+        undefined, // No total - indeterminate progress
+        message
+      );
+      messageIndex++;
+
+      // Schedule next tick only after this one is done
+      if (!progressData.completed) {
+        scheduleNext();
+      }
+    }, PROTOCOL.KEEPALIVE_INTERVAL); // Every 10 seconds
+  };
+
+  scheduleNext();
   
   return progressData;
 }
@@ -155,8 +164,8 @@ async function stopProgressUpdates(
   success: boolean = true
 ) {
   progressData.completed = true;
-  if (progressData.interval) {
-    clearInterval(progressData.interval);
+  if (progressData.timeout) {
+    clearTimeout(progressData.timeout);
   }
   
   // Send final progress notification if client requested progress
@@ -202,7 +211,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     const progressToken = (request.params as any)._meta?.progressToken;
     
     // Start progress updates if client requested them
-    const progressData = startProgressUpdates(toolName, progressToken);
+    const progressData = await startProgressUpdates(toolName, progressToken);
     
     try {
       // Get prompt and other parameters from arguments with proper typing
