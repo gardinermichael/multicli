@@ -457,6 +457,17 @@ function main(): void {
     process.exit(1);
   }
 
+  // Compare catalog data — skip write if nothing meaningful changed.
+  // This avoids opening PRs that only update the generatedAt timestamp.
+  if (existing) {
+    const oldCatalogs = JSON.stringify(existing.catalogs);
+    const newCatalogs = JSON.stringify(catalogs);
+    if (oldCatalogs === newCatalogs) {
+      console.log('\n⊘ No catalog changes detected — skipping write.');
+      return;
+    }
+  }
+
   const output: GeneratedFile = {
     generatedAt: new Date().toISOString(),
     catalogs,
