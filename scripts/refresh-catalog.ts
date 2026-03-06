@@ -449,7 +449,11 @@ function main(): void {
     console.error(
       `\nRefusing to write incomplete catalog — missing entries for: ${missing.join(', ')}`,
     );
-    console.error('The existing generated file has been preserved.');
+    if (existing) {
+      console.error('The existing generated file has been preserved.');
+    } else {
+      console.error('No catalog file was written (no existing file to preserve).');
+    }
     process.exit(1);
   }
 

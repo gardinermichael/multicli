@@ -35,10 +35,21 @@ interface GeneratedFile {
 let generatedData: GeneratedFile;
 try {
   const require = createRequire(import.meta.url);
-  generatedData = require('./modelCatalog.generated.json') as GeneratedFile;
+  const raw = require('./modelCatalog.generated.json') as unknown;
+  if (
+    !raw ||
+    typeof raw !== 'object' ||
+    !('catalogs' in raw) ||
+    typeof (raw as Record<string, unknown>).catalogs !== 'object'
+  ) {
+    throw new Error('invalid shape');
+  }
+  generatedData = raw as GeneratedFile;
 } catch {
   throw new Error(
-    "Failed to load modelCatalog.generated.json. Run 'npm run refresh-catalog'.",
+    'Failed to load modelCatalog.generated.json. ' +
+      "If developing locally, run 'npm run refresh-catalog'. " +
+      'If using the published package, try reinstalling or upgrading.',
   );
 }
 
@@ -79,7 +90,9 @@ for (const cli of ['gemini', 'codex', 'claude'] as const) {
   const built = buildFromGenerated(cli);
   if (!built) {
     throw new Error(
-      `No catalog entry for "${cli}" in generated data. Run 'npm run refresh-catalog'.`,
+      `No catalog entry for "${cli}" in generated data. ` +
+        "If developing locally, run 'npm run refresh-catalog'. " +
+        'If using the published package, try reinstalling or upgrading.',
     );
   }
   CATALOGS[cli] = built;
