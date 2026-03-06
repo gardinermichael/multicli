@@ -10,10 +10,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cd "$TMP_DIR" || { echo '{}'; exit 0; }
+cd "$TMP_DIR" || { echo '[]'; exit 0; }
 
-TARBALL=$(npm pack @anthropic-ai/claude-code@latest) || { echo '{}'; exit 0; }
-tar -xzf "$TARBALL" || { echo '{}'; exit 0; }
+TARBALL=$(npm pack @anthropic-ai/claude-code@latest) || { echo '[]'; exit 0; }
+tar -xzf "$TARBALL" || { echo '[]'; exit 0; }
 
 RESULT=$(grep 'OPUS_ID.*OPUS_NAME.*SONNET_ID.*SONNET_NAME' ./package/cli.js | \
   grep -o '{OPUS_ID:"[^"]*",OPUS_NAME:"[^"]*",SONNET_ID:"[^"]*",SONNET_NAME:"[^"]*"[^}]*}' | \

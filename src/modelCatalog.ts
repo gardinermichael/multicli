@@ -32,101 +32,21 @@ interface GeneratedFile {
   catalogs: Record<string, GeneratedCatalogEntry>;
 }
 
-let generatedData: GeneratedFile | null = null;
+let generatedData: GeneratedFile;
 try {
   const require = createRequire(import.meta.url);
   generatedData = require('./modelCatalog.generated.json') as GeneratedFile;
 } catch {
-  // Generated file doesn't exist yet — will use hardcoded fallback
+  throw new Error(
+    "Failed to load modelCatalog.generated.json. Run 'npm run refresh-catalog'.",
+  );
 }
 
-// ── Hardcoded fallback catalogs ──────────────────────────────────────────────
-
-const FALLBACK_CATALOGS: Record<string, CLICatalog> = {
-  gemini: {
-    cli: 'gemini',
-    tiers: [
-      {
-        tier: 'fast',
-        label: 'Flash',
-        models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-        useWhen: 'Only for: trivial lookups, simple math, quick one-line answers.',
-      },
-      {
-        tier: 'balanced',
-        label: 'Flash Preview (DEFAULT)',
-        models: ['gemini-3-flash-preview'],
-        useWhen:
-          'Most tasks: coding, analysis, multi-step work, debugging, code review. USE THIS BY DEFAULT.',
-      },
-      {
-        tier: 'powerful',
-        label: 'Pro',
-        models: ['gemini-3.1-pro-preview', 'gemini-2.5-pro'],
-        useWhen:
-          'Complex analysis, deep reasoning, large codebase understanding, nuanced opinions, architectural decisions.',
-      },
-    ],
-    note: 'Run Gemini-Help for the latest CLI options. Model IDs may change as Google releases new versions.',
-  },
-  codex: {
-    cli: 'codex',
-    tiers: [
-      {
-        tier: 'fast',
-        label: 'Codex Mini',
-        models: ['gpt-5.1-codex-mini'],
-        useWhen: 'Only for: trivial lookups, simple math, quick one-line answers.',
-      },
-      {
-        tier: 'balanced',
-        label: 'Codex (DEFAULT)',
-        models: ['gpt-5.2-codex'],
-        useWhen:
-          'Most tasks: coding, analysis, multi-file changes, debugging, code review. USE THIS BY DEFAULT.',
-      },
-      {
-        tier: 'powerful',
-        label: 'Codex Max / GPT',
-        models: ['gpt-5.3-codex', 'gpt-5.1-codex-max', 'gpt-5.2'],
-        useWhen:
-          'Complex architecture, large refactors, deep reasoning, nuanced analysis, multi-step planning.',
-      },
-    ],
-    note: 'Run Codex-Help for the latest CLI options. Model IDs may change as OpenAI releases new versions.',
-  },
-  claude: {
-    cli: 'claude',
-    tiers: [
-      {
-        tier: 'fast',
-        label: 'Haiku',
-        models: ['claude-haiku-4-5-20251001'],
-        useWhen: 'Only for: trivial lookups, simple math, quick one-line answers.',
-      },
-      {
-        tier: 'balanced',
-        label: 'Sonnet (DEFAULT)',
-        models: ['claude-sonnet-4-6'],
-        useWhen:
-          'Most tasks: coding, analysis, multi-step work, debugging, code review. USE THIS BY DEFAULT.',
-      },
-      {
-        tier: 'powerful',
-        label: 'Opus',
-        models: ['claude-opus-4-6'],
-        useWhen:
-          'Complex reasoning, nuanced analysis, architectural decisions, large refactors, or when you need the highest quality.',
-      },
-    ],
-    note: 'Run Claude-Help for the latest CLI options.',
-  },
-};
-
-// ── Build catalog from generated data ────────────────────────────────────────
+// ── Build catalog from generated data (no static fallback — generated file
+//    is checked into git and always ships with the package) ──────────────────
 
 function buildFromGenerated(cliName: CLIName): CLICatalog | null {
-  const entry = generatedData?.catalogs[cliName];
+  const entry = generatedData.catalogs[cliName];
   if (!entry?.tiers?.length) return null;
 
   const tiers: ModelTier[] = [];
@@ -156,7 +76,13 @@ function buildFromGenerated(cliName: CLIName): CLICatalog | null {
 
 const CATALOGS: Record<string, CLICatalog> = {};
 for (const cli of ['gemini', 'codex', 'claude'] as const) {
-  CATALOGS[cli] = buildFromGenerated(cli) ?? FALLBACK_CATALOGS[cli];
+  const built = buildFromGenerated(cli);
+  if (!built) {
+    throw new Error(
+      `No catalog entry for "${cli}" in generated data. Run 'npm run refresh-catalog'.`,
+    );
+  }
+  CATALOGS[cli] = built;
 }
 
 // ── Public API (unchanged signatures) ────────────────────────────────────────

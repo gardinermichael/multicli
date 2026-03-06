@@ -438,6 +438,21 @@ function main(): void {
     process.exit(1);
   }
 
+  // Verify all CLIs have entries with non-empty tiers before writing.
+  // The runtime (modelCatalog.ts) requires all 3 CLIs to be present and will
+  // throw if any are missing, so we must never write a partial file.
+  const requiredCLIs = CLI_CONFIGS.map((c) => c.name);
+  const missing = requiredCLIs.filter(
+    (name) => !catalogs[name]?.tiers?.length,
+  );
+  if (missing.length > 0) {
+    console.error(
+      `\nRefusing to write incomplete catalog — missing entries for: ${missing.join(', ')}`,
+    );
+    console.error('The existing generated file has been preserved.');
+    process.exit(1);
+  }
+
   const output: GeneratedFile = {
     generatedAt: new Date().toISOString(),
     catalogs,
