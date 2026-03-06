@@ -65,7 +65,12 @@ jobs:
       contents: write
       id-token: write
     steps:
+      # Check out the latest main — NOT the triggering SHA. This ensures
+      # queued runs (from rapid successive pushes) pick up version bumps
+      # committed by earlier runs, preventing duplicate version conflicts.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
 
       - name: Setup Node.js 24
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
@@ -80,7 +85,10 @@ jobs:
           echo "npm version: $NPM_VERSION"
           MAJOR=$(echo "$NPM_VERSION" | cut -d. -f1)
           MINOR=$(echo "$NPM_VERSION" | cut -d. -f2)
-          if [ "$MAJOR" -lt 11 ] || ([ "$MAJOR" -eq 11 ] && [ "$MINOR" -lt 5 ]); then
+          PATCH=$(echo "$NPM_VERSION" | cut -d. -f3)
+          if [ "$MAJOR" -lt 11 ] || \
+             ([ "$MAJOR" -eq 11 ] && [ "$MINOR" -lt 5 ]) || \
+             ([ "$MAJOR" -eq 11 ] && [ "$MINOR" -eq 5 ] && [ "${PATCH:-0}" -lt 1 ]); then
             echo "::error::npm >= 11.5.1 required for OIDC. Found: $NPM_VERSION"
             exit 1
           fi
@@ -88,28 +96,49 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Bump patch version
+      - name: Determine version
         id: bump
         run: |
-          npm version patch --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
+          CURRENT=$(node -p "require('./package.json').version")
+
+          # Only bump if the current version already exists on npm.
+          # This preserves manual major/minor bumps made in PRs —
+          # if someone sets version to 2.0.0, we publish 2.0.0 (not 2.0.1).
+          if npm view "@osanoai/multicli@$CURRENT" version >/dev/null 2>&1; then
+            npm version patch --no-git-tag-version
+            VERSION=$(node -p "require('./package.json').version")
+            echo "Bumped $CURRENT → $VERSION"
+          else
+            VERSION="$CURRENT"
+            echo "Version $VERSION not yet on npm — publishing as-is"
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Bumped to $VERSION"
 
       - name: Build
         run: npm run build
 
-      - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
-
-      - name: Commit version bump, tag, and push
+      # Push the version bump BEFORE publishing. If push fails (e.g. due to
+      # a concurrent push to main), we haven't mutated npm — safe to retry.
+      # If push succeeds but publish later fails, the next run will see the
+      # version isn't on npm and retry the publish without re-bumping.
+      - name: Commit and push version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json
-          git commit -m "chore: release v${{ steps.bump.outputs.version }}"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: release v${{ steps.bump.outputs.version }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+
+      - name: Tag and push
+        run: |
           git tag "v${{ steps.bump.outputs.version }}"
-          git push origin main --tags
+          git push origin "v${{ steps.bump.outputs.version }}"
 
       - name: Create GitHub Release
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
