@@ -90,7 +90,7 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 - `npm run test:watch` — run tests in watch mode (`vitest`)
 - `npm run test:coverage` — run tests with coverage (`vitest run --coverage`)
 - **Framework**: Vitest 4.x with globals enabled
-- **Test files**: `tests/**/*.test.ts` (13 files, 191 tests)
+- **Test files**: `tests/**/*.test.ts` (13 files, 194 tests)
 - **CI**: `.github/workflows/tests.yml` runs lint, build, and tests on Node 20, 22, and 24
 - **Mocking**: `vi.mock()` for fs/os/child_process and internal modules; pure-logic modules tested without mocks
 
