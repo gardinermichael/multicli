@@ -62,8 +62,8 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 ### 8. Releases
 - **Every push to `main` automatically bumps the patch version and publishes to npm.**
 - The release workflow (`release.yml`) handles version bumps, npm publish, git tags, and GitHub releases — no manual steps needed.
-- **Never manually edit `package.json` version** — CI auto-increments the patch version on every merge to main.
-- For major or minor bumps, manually update `package.json` version before merging to main (the workflow will use the bumped version as the base for its patch increment).
+- **Do not manually edit the `package.json` version for patch releases** — CI auto-increments the patch version on every merge to `main`.
+- For intentional **major** or **minor** version bumps, manually update the `package.json` version before merging to `main` (the workflow will use that version as the base for its patch increment).
 
 ## Core Principles
 
