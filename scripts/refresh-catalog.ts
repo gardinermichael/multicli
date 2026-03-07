@@ -149,6 +149,37 @@ function discoverModels(config: CLIConfig): string[] | null {
   }
 }
 
+// ── Phase 1.5: PROBE ────────────────────────────────────────────────────
+
+/**
+ * Probe each discovered model by running a trivial CLI prompt.
+ * Returns only the model IDs that respond successfully.
+ */
+export function probeModels(config: CLIConfig, modelIds: string[]): string[] {
+  console.log(`  [probe] Testing ${modelIds.length} models for availability...`);
+
+  const valid: string[] = [];
+
+  for (const id of modelIds) {
+    const command = config.buildEnrichmentCommand(id, 'respond with OK');
+    try {
+      execSync(command, {
+        encoding: 'utf-8',
+        timeout: 30_000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      valid.push(id);
+      console.log(`    ${id}: available`);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message.split('\n')[0] : String(err);
+      console.warn(`    ${id}: unavailable — ${reason}`);
+    }
+  }
+
+  console.log(`  [probe] ${valid.length}/${modelIds.length} models available`);
+  return valid;
+}
+
 // ── Phase 2: ENRICH ──────────────────────────────────────────────────────────
 
 export function buildEnrichmentPrompt(cliName: string, modelIds: string[]): string {
@@ -416,16 +447,30 @@ function main(): void {
       continue;
     }
 
+    // Phase 1.5: PROBE — test each model for availability
+    const validIds = probeModels(config, modelIds);
+
+    if (validIds.length === 0) {
+      console.warn(`  [probe] all models failed probing for ${config.name}`);
+      if (existing?.catalogs[config.name]) {
+        console.log(`  [fallback] keeping entire previous catalog for ${config.name}`);
+        catalogs[config.name] = existing.catalogs[config.name];
+      } else {
+        console.warn(`  [fallback] no previous catalog for ${config.name}, skipping`);
+      }
+      continue;
+    }
+
     anyDiscoverySuccess = true;
 
     // Phase 2: ENRICH
-    const enrichment = enrichModels(config, modelIds);
+    const enrichment = enrichModels(config, validIds);
 
     // Phase 3: VALIDATE (inside enrichModels → validateEnrichment)
 
     // Phase 4: FALLBACK + ASSIGN
     const previousCatalog = existing?.catalogs[config.name] ?? null;
-    catalogs[config.name] = assignTiers(modelIds, enrichment, previousCatalog, config.name);
+    catalogs[config.name] = assignTiers(validIds, enrichment, previousCatalog, config.name);
 
     const totalModels = catalogs[config.name].tiers.reduce((sum, t) => sum + t.models.length, 0);
     console.log(

@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   heuristicTier,
   validateEnrichment,
   assignTiers,
   buildEnrichmentPrompt,
   pickEnrichmentModel,
+  probeModels,
 } from '../scripts/refresh-catalog.js';
 import type { EnrichmentEntry } from '../scripts/refresh-catalog.js';
 
@@ -294,5 +295,73 @@ describe('pickEnrichmentModel', () => {
   it('handles future model names gracefully', () => {
     const ids = ['claude-haiku-99-turbo', 'claude-opus-99'];
     expect(pickEnrichmentModel(ids, /haiku/i)).toBe('claude-haiku-99-turbo');
+  });
+});
+
+// ===========================================================================
+// probeModels
+// ===========================================================================
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execSync: vi.fn(actual.execSync),
+    execFileSync: actual.execFileSync,
+  };
+});
+
+import { execSync } from 'node:child_process';
+const mockExecSync = vi.mocked(execSync);
+
+describe('probeModels', () => {
+  const fakeConfig = {
+    name: 'test',
+    expectedPrefix: 'model-',
+    extractScript: 'scripts/extract-test.sh',
+    fastModelPattern: /mini/i,
+    buildEnrichmentCommand: (model: string, prompt: string) =>
+      `test-cli -m ${model} '${prompt}'`,
+  };
+
+  beforeEach(() => {
+    mockExecSync.mockReset();
+  });
+
+  it('returns all models when all probes succeed', () => {
+    mockExecSync.mockReturnValue('OK');
+    const result = probeModels(fakeConfig, ['model-a', 'model-b', 'model-c']);
+    expect(result).toEqual(['model-a', 'model-b', 'model-c']);
+    expect(mockExecSync).toHaveBeenCalledTimes(3);
+  });
+
+  it('filters out models that fail probing', () => {
+    mockExecSync
+      .mockReturnValueOnce('OK')           // model-a: success
+      .mockImplementationOnce(() => { throw new Error('model not found'); }) // model-b: fail
+      .mockReturnValueOnce('OK');           // model-c: success
+    const result = probeModels(fakeConfig, ['model-a', 'model-b', 'model-c']);
+    expect(result).toEqual(['model-a', 'model-c']);
+  });
+
+  it('returns empty array when all probes fail', () => {
+    mockExecSync.mockImplementation(() => { throw new Error('fail'); });
+    const result = probeModels(fakeConfig, ['model-a', 'model-b']);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for empty input', () => {
+    const result = probeModels(fakeConfig, []);
+    expect(result).toEqual([]);
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it('calls buildEnrichmentCommand with trivial probe prompt', () => {
+    mockExecSync.mockReturnValue('OK');
+    probeModels(fakeConfig, ['model-a']);
+    expect(mockExecSync).toHaveBeenCalledWith(
+      expect.stringContaining('respond with OK'),
+      expect.objectContaining({ timeout: 30_000 }),
+    );
   });
 });
