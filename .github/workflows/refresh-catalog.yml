@@ -32,6 +32,11 @@ jobs:
           npm install -g --ignore-scripts @anthropic-ai/claude-code @google/gemini-cli @openai/codex
         continue-on-error: true
 
+      - name: Login Codex CLI
+        run: echo "$OPENAI_API_KEY" | codex login --with-api-key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
       - name: Refresh catalog
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
