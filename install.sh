@@ -14,22 +14,25 @@ SERVER_NAME="Multi-CLI"
 
 echo ""
 echo -e "${CYAN}${BOLD}  Multi-CLI MCP Installer${RESET}"
-echo -e "${CYAN}  Bridging Claude, Gemini, and Codex${RESET}"
+echo -e "${CYAN}  Bridging Claude, Gemini, Codex, and OpenCode${RESET}"
 echo ""
 
 # Detect available CLIs
 CLAUDE_FOUND=false
 GEMINI_FOUND=false
 CODEX_FOUND=false
+OPENCODE_FOUND=false
 
-command -v claude &>/dev/null && CLAUDE_FOUND=true
-command -v gemini &>/dev/null && GEMINI_FOUND=true
-command -v codex  &>/dev/null && CODEX_FOUND=true
+command -v claude   &>/dev/null && CLAUDE_FOUND=true
+command -v gemini   &>/dev/null && GEMINI_FOUND=true
+command -v codex    &>/dev/null && CODEX_FOUND=true
+command -v opencode &>/dev/null && OPENCODE_FOUND=true
 
 FOUND_COUNT=0
-$CLAUDE_FOUND && ((FOUND_COUNT++)) || true
-$GEMINI_FOUND && ((FOUND_COUNT++)) || true
-$CODEX_FOUND  && ((FOUND_COUNT++)) || true
+$CLAUDE_FOUND   && ((FOUND_COUNT++)) || true
+$GEMINI_FOUND   && ((FOUND_COUNT++)) || true
+$CODEX_FOUND    && ((FOUND_COUNT++)) || true
+$OPENCODE_FOUND && ((FOUND_COUNT++)) || true
 
 # Bail if nothing is installed
 if [ "$FOUND_COUNT" -eq 0 ]; then
@@ -39,6 +42,7 @@ if [ "$FOUND_COUNT" -eq 0 ]; then
   echo "  • Claude Code  →  npm install -g @anthropic-ai/claude-code"
   echo "  • Gemini CLI   →  npm install -g @google/gemini-cli"
   echo "  • Codex CLI    →  npm install -g @openai/codex"
+  echo "  • OpenCode     →  curl -fsSL https://opencode.ai/install | bash"
   echo ""
   echo "Install at least two for the full multi-model experience, then re-run this script."
   echo ""
@@ -76,6 +80,38 @@ if $CODEX_FOUND; then
   fi
 fi
 
+if $OPENCODE_FOUND; then
+  echo -e "  ${CYAN}→ Installing for OpenCode...${RESET}"
+  OPENCODE_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+  OPENCODE_CONFIG="$OPENCODE_CONFIG_DIR/opencode.json"
+  mkdir -p "$OPENCODE_CONFIG_DIR"
+
+  # Build the MCP entry we want to add
+  MCP_ENTRY='{"type":"local","command":["npx","-y","@osanoai/multicli@latest"]}'
+
+  if [ -f "$OPENCODE_CONFIG" ]; then
+    # Config exists — merge our MCP server into it using node (already required)
+    if node -e "
+      const fs = require('fs');
+      const cfg = JSON.parse(fs.readFileSync('$OPENCODE_CONFIG', 'utf-8'));
+      cfg.mcp = cfg.mcp || {};
+      cfg.mcp['$SERVER_NAME'] = $MCP_ENTRY;
+      fs.writeFileSync('$OPENCODE_CONFIG', JSON.stringify(cfg, null, 2) + '\n');
+    " 2>/dev/null; then
+      INSTALLED+=("OpenCode")
+    else
+      FAILED+=("OpenCode")
+    fi
+  else
+    # No config — create one
+    if printf '{\n  "mcp": {\n    "%s": %s\n  }\n}\n' "$SERVER_NAME" "$MCP_ENTRY" > "$OPENCODE_CONFIG" 2>/dev/null; then
+      INSTALLED+=("OpenCode")
+    else
+      FAILED+=("OpenCode")
+    fi
+  fi
+fi
+
 echo ""
 
 # Report failures
@@ -104,9 +140,10 @@ if [ "$FOUND_COUNT" -eq 1 ]; then
   echo -e "${YELLOW}  With only ${INSTALLED[0]} installed, there's nothing to bridge to.${RESET}"
   echo ""
   echo "  Install at least one more CLI to unlock cross-model collaboration:"
-  $CLAUDE_FOUND || echo "    • Claude Code  →  npm install -g @anthropic-ai/claude-code"
-  $GEMINI_FOUND || echo "    • Gemini CLI   →  npm install -g @google/gemini-cli"
-  $CODEX_FOUND  || echo "    • Codex CLI    →  npm install -g @openai/codex"
+  $CLAUDE_FOUND   || echo "    • Claude Code  →  npm install -g @anthropic-ai/claude-code"
+  $GEMINI_FOUND   || echo "    • Gemini CLI   →  npm install -g @google/gemini-cli"
+  $CODEX_FOUND    || echo "    • Codex CLI    →  npm install -g @openai/codex"
+  $OPENCODE_FOUND || echo "    • OpenCode     →  curl -fsSL https://opencode.ai/install | bash"
   echo ""
 else
   echo -e "${GREEN}${BOLD}  Multi-CLI installed successfully!${RESET}"

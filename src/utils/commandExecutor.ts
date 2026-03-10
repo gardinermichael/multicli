@@ -21,7 +21,8 @@ export function sanitizeArgForCmd(arg: string): string {
 export async function executeCommand(
   command: string,
   args: string[],
-  onProgress?: (newOutput: string) => void
+  onProgress?: (newOutput: string) => void,
+  timeoutMs?: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     // Use shell: true on Windows to properly execute .cmd files and resolve PATH.
@@ -37,10 +38,22 @@ export async function executeCommand(
     let stderr = "";
     let isResolved = false;
     let lastReportedLength = 0;
-    
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    if (timeoutMs && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          childProcess.kill('SIGTERM');
+          reject(new Error(`Command timed out after ${timeoutMs}ms`));
+        }
+      }, timeoutMs);
+    }
+
     childProcess.stdout.on("data", (data) => {
+      if (isResolved) return;
       stdout += data.toString();
-      
+
       // Report new content if callback provided
       if (onProgress && stdout.length > lastReportedLength) {
         const newContent = stdout.substring(lastReportedLength);
@@ -52,6 +65,7 @@ export async function executeCommand(
 
     // CLI level errors
     childProcess.stderr.on("data", (data) => {
+      if (isResolved) return;
       stderr += data.toString();
       // find RESOURCE_EXHAUSTED when gemini quota is exceeded
       if (stderr.includes("RESOURCE_EXHAUSTED")) {
@@ -61,12 +75,14 @@ export async function executeCommand(
     childProcess.on("error", (error) => {
       if (!isResolved) {
         isResolved = true;
+        if (timer) clearTimeout(timer);
         reject(new Error(`Failed to spawn command: ${error.message}`));
       }
     });
     childProcess.on("close", (code) => {
       if (!isResolved) {
         isResolved = true;
+        if (timer) clearTimeout(timer);
         if (code === 0) {
           resolve(stdout.trim());
         } else {
