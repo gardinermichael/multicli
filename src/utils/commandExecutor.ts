@@ -51,6 +51,7 @@ export async function executeCommand(
     }
 
     childProcess.stdout.on("data", (data) => {
+      if (isResolved) return;
       stdout += data.toString();
 
       // Report new content if callback provided
@@ -64,6 +65,7 @@ export async function executeCommand(
 
     // CLI level errors
     childProcess.stderr.on("data", (data) => {
+      if (isResolved) return;
       stderr += data.toString();
       // find RESOURCE_EXHAUSTED when gemini quota is exceeded
       if (stderr.includes("RESOURCE_EXHAUSTED")) {

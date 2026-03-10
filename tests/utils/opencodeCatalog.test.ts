@@ -11,8 +11,18 @@ vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn(),
 }));
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return {
+    ...actual,
+    platform: vi.fn(() => actual.platform()),
+    homedir: vi.fn(() => actual.homedir()),
+  };
+});
+
 import { executeCommand } from '../../src/utils/commandExecutor.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { platform, homedir } from 'node:os';
 import {
   listOpencodeModels,
   hashModelList,
@@ -226,13 +236,10 @@ describe('opencodeCatalog', () => {
 
     it('uses Library/Caches on darwin', () => {
       delete process.env.MULTICLI_CACHE_DIR;
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'darwin' });
-      // getCacheDir uses os.platform() not process.platform directly,
-      // so this test validates the env var path primarily
-      process.env.MULTICLI_CACHE_DIR = '/test/darwin';
-      expect(getCacheDir()).toBe('/test/darwin');
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      vi.mocked(platform).mockReturnValue('darwin');
+      vi.mocked(homedir).mockReturnValue('/Users/testuser');
+      const dir = getCacheDir();
+      expect(dir).toBe('/Users/testuser/Library/Caches/osanoai');
     });
   });
 

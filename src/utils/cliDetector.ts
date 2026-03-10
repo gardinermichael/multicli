@@ -38,8 +38,8 @@ export interface CliAvailability {
 }
 
 /**
- * Detect which of the three supported CLIs are available on the system.
- * Runs all three checks in parallel for speed.
+ * Detect which of the four supported CLIs are available on the system.
+ * Runs all four checks in parallel for speed.
  */
 export async function detectAvailableClis(): Promise<CliAvailability> {
   if (process.env.QA_NO_CLIS === 'true') {
