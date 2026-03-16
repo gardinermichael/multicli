@@ -6,6 +6,7 @@ import {
   buildEnrichmentPrompt,
   pickEnrichmentModel,
   probeModels,
+  getModelSets,
 } from '../scripts/refresh-catalog.js';
 import type { EnrichmentEntry } from '../scripts/refresh-catalog.js';
 
@@ -382,5 +383,114 @@ describe('probeModels', () => {
       expect.stringContaining('respond with OK'),
       expect.objectContaining({ timeout: 30_000 }),
     );
+  });
+});
+
+// ===========================================================================
+// getModelSets (change detection)
+// ===========================================================================
+
+describe('getModelSets', () => {
+  it('returns sorted model IDs per CLI, ignoring tiers', () => {
+    const cats = {
+      claude: { cli: 'claude', tiers: [
+        { tier: 'fast' as const, models: ['claude-haiku-4-5'] },
+        { tier: 'powerful' as const, models: ['claude-opus-4-6'] },
+        { tier: 'balanced' as const, models: ['claude-sonnet-4-5'] },
+      ]},
+    };
+    expect(getModelSets(cats)).toEqual({
+      claude: ['claude-haiku-4-5', 'claude-opus-4-6', 'claude-sonnet-4-5'],
+    });
+  });
+
+  it('treats same models in different tiers as identical', () => {
+    const catsA = {
+      codex: { cli: 'codex', tiers: [
+        { tier: 'fast' as const, models: ['gpt-5-codex'] },
+        { tier: 'balanced' as const, models: ['gpt-5.2'] },
+      ]},
+    };
+    const catsB = {
+      codex: { cli: 'codex', tiers: [
+        { tier: 'balanced' as const, models: ['gpt-5-codex', 'gpt-5.2'] },
+      ]},
+    };
+    expect(JSON.stringify(getModelSets(catsA)))
+      .toBe(JSON.stringify(getModelSets(catsB)));
+  });
+
+  it('treats same models in different order as identical', () => {
+    const catsA = {
+      gemini: { cli: 'gemini', tiers: [
+        { tier: 'fast' as const, models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'] },
+      ]},
+    };
+    const catsB = {
+      gemini: { cli: 'gemini', tiers: [
+        { tier: 'fast' as const, models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash'] },
+      ]},
+    };
+    expect(JSON.stringify(getModelSets(catsA)))
+      .toBe(JSON.stringify(getModelSets(catsB)));
+  });
+
+  it('is independent of CLI key insertion order', () => {
+    const catsA = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+      gemini: { cli: 'gemini', tiers: [{ tier: 'fast' as const, models: ['b'] }] },
+    };
+    const catsB = {
+      gemini: { cli: 'gemini', tiers: [{ tier: 'fast' as const, models: ['b'] }] },
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+    };
+    expect(JSON.stringify(getModelSets(catsA)))
+      .toBe(JSON.stringify(getModelSets(catsB)));
+  });
+
+  it('deduplicates model IDs across tiers', () => {
+    const cats = {
+      codex: { cli: 'codex', tiers: [
+        { tier: 'fast' as const, models: ['gpt-5-codex'] },
+        { tier: 'balanced' as const, models: ['gpt-5-codex', 'gpt-5.2'] },
+      ]},
+    };
+    expect(getModelSets(cats)).toEqual({
+      codex: ['gpt-5-codex', 'gpt-5.2'],
+    });
+  });
+
+  it('detects when a new model is added', () => {
+    const old = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+    };
+    const updated = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a', 'b'] }] },
+    };
+    expect(JSON.stringify(getModelSets(old)))
+      .not.toBe(JSON.stringify(getModelSets(updated)));
+  });
+
+  it('detects when a model is removed', () => {
+    const old = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a', 'b'] }] },
+    };
+    const updated = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+    };
+    expect(JSON.stringify(getModelSets(old)))
+      .not.toBe(JSON.stringify(getModelSets(updated)));
+  });
+
+  it('detects when a new CLI is added', () => {
+    const old = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+    };
+    const updated = {
+      claude: { cli: 'claude', tiers: [{ tier: 'fast' as const, models: ['a'] }] },
+      gemini: { cli: 'gemini', tiers: [{ tier: 'fast' as const, models: ['b'] }] },
+    };
+    expect(JSON.stringify(getModelSets(old)))
+      .not.toBe(JSON.stringify(getModelSets(updated)));
   });
 });

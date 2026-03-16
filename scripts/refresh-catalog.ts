@@ -421,7 +421,7 @@ export function assignTiers(
 
   for (const tier of tierOrder) {
     if (tierBuckets[tier].length > 0) {
-      tiers.push({ tier, models: tierBuckets[tier] });
+      tiers.push({ tier, models: tierBuckets[tier].sort() });
     }
   }
 
@@ -437,6 +437,22 @@ function loadExisting(): GeneratedFile | null {
   } catch {
     return null;
   }
+}
+
+// ── Change detection ─────────────────────────────────────────────────────────
+
+/**
+ * Extract a flat, sorted, deduplicated list of model IDs per CLI.
+ * Used to compare old vs new catalogs — only model additions/removals matter,
+ * not tier reshuffling or ordering changes.
+ */
+export function getModelSets(cats: Record<string, GeneratedCatalog>): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const cli of Object.keys(cats).sort()) {
+    const allModels = cats[cli].tiers.flatMap(t => t.models);
+    result[cli] = [...new Set(allModels)].sort();
+  }
+  return result;
 }
 
 // ── Phase 5: WRITE (main orchestrator) ───────────────────────────────────────
@@ -520,13 +536,13 @@ function main(): void {
     process.exit(1);
   }
 
-  // Compare catalog data — skip write if nothing meaningful changed.
-  // This avoids opening PRs that only update the generatedAt timestamp.
+  // Only deploy when models are actually added or removed.
+  // Tier reshuffling and ordering differences are not worth a release.
   if (existing) {
-    const oldCatalogs = JSON.stringify(existing.catalogs);
-    const newCatalogs = JSON.stringify(catalogs);
-    if (oldCatalogs === newCatalogs) {
-      console.log('\n⊘ No catalog changes detected — skipping write.');
+    const oldSets = getModelSets(existing.catalogs);
+    const newSets = getModelSets(catalogs);
+    if (JSON.stringify(oldSets) === JSON.stringify(newSets)) {
+      console.log('\n⊘ No model additions or removals detected — skipping write.');
       return;
     }
   }

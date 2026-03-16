@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-15T09:14:28.847Z",
+  "generatedAt": "2026-03-16T03:48:38.802Z",
   "catalogs": {
     "claude": {
       "cli": "claude",
@@ -38,7 +38,8 @@
         {
           "tier": "balanced",
           "models": [
-            "gemini-2.5-pro"
+            "gemini-2.5-pro",
+            "gemini-3-flash-preview"
           ]
         },
         {
@@ -56,6 +57,7 @@
         {
           "tier": "fast",
           "models": [
+            "gpt-5-codex-mini",
             "gpt-5.1-codex-mini"
           ]
         },

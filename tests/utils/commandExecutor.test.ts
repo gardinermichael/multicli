@@ -134,6 +134,29 @@ describe('commandExecutor', () => {
     }
   });
 
+  it('rejects when exit 0 but stdout empty and stderr has content', async () => {
+    const mock = createMockProcess();
+    vi.mocked(spawn).mockReturnValue(mock.proc as any);
+
+    const promise = executeCommand('opencode', ['run', 'hi', '-m', 'invalid/model']);
+    mock.emitStderr('Model not found: invalid/model');
+    mock.emitClose(0);
+
+    await expect(promise).rejects.toThrow('Command produced no output');
+    await expect(promise).rejects.toThrow('Model not found: invalid/model');
+  });
+
+  it('resolves with empty string when exit 0 and both stdout and stderr are empty', async () => {
+    const mock = createMockProcess();
+    vi.mocked(spawn).mockReturnValue(mock.proc as any);
+
+    const promise = executeCommand('cmd', []);
+    mock.emitClose(0);
+
+    const result = await promise;
+    expect(result).toBe('');
+  });
+
   it('clears timeout when command completes before timeout', async () => {
     vi.useFakeTimers();
     try {
@@ -156,34 +179,89 @@ describe('commandExecutor', () => {
 });
 
 describe('sanitizeArgForCmd', () => {
-  it('passes through safe strings unchanged', () => {
-    expect(sanitizeArgForCmd('hello world')).toBe('hello world');
-    expect(sanitizeArgForCmd('-m model-name')).toBe('-m model-name');
+  it('passes through single-word args unchanged', () => {
+    expect(sanitizeArgForCmd('hello')).toBe('hello');
+    expect(sanitizeArgForCmd('--full-auto')).toBe('--full-auto');
+    expect(sanitizeArgForCmd('gpt-5.2-codex')).toBe('gpt-5.2-codex');
   });
 
-  it('escapes double quotes with cmd.exe convention ("")', () => {
-    expect(sanitizeArgForCmd('say "hello"')).toBe('say ""hello""');
+  it('wraps multi-word args in double quotes to preserve argv boundaries', () => {
+    expect(sanitizeArgForCmd('hello world')).toBe('"hello world"');
+    expect(sanitizeArgForCmd('Respond with a brief greeting')).toBe('"Respond with a brief greeting"');
+    expect(sanitizeArgForCmd('-m model-name')).toBe('"-m model-name"');
   });
 
-  it('escapes percent signs to prevent %VAR% expansion', () => {
-    expect(sanitizeArgForCmd('improve by 100%')).toBe('improve by 100%%');
+  it('wraps args containing tabs in double quotes', () => {
+    expect(sanitizeArgForCmd('a\tb')).toBe('"a\tb"');
+  });
+
+  it('wraps and escapes args with embedded double quotes', () => {
+    expect(sanitizeArgForCmd('say "hello"')).toBe('"say ""hello"""');
+    expect(sanitizeArgForCmd('say "hello world"')).toBe('"say ""hello world"""');
+  });
+
+  it('escapes percent signs in unquoted args', () => {
+    expect(sanitizeArgForCmd('100%')).toBe('100%%');
     expect(sanitizeArgForCmd('%PATH%')).toBe('%%PATH%%');
   });
 
-  it('caret-escapes cmd.exe shell operators', () => {
-    expect(sanitizeArgForCmd('read & summarize')).toBe('read ^& summarize');
-    expect(sanitizeArgForCmd('a | b')).toBe('a ^| b');
-    expect(sanitizeArgForCmd('a > b')).toBe('a ^> b');
-    expect(sanitizeArgForCmd('a < b')).toBe('a ^< b');
-    expect(sanitizeArgForCmd('a ^ b')).toBe('a ^^ b');
+  it('escapes percent signs inside quoted args', () => {
+    expect(sanitizeArgForCmd('improve by 100%')).toBe('"improve by 100%%"');
   });
 
-  it('handles combined metacharacters', () => {
+  it('caret-escapes shell operators in unquoted args (no spaces)', () => {
+    expect(sanitizeArgForCmd('a&b')).toBe('a^&b');
+    expect(sanitizeArgForCmd('a|b')).toBe('a^|b');
+    expect(sanitizeArgForCmd('a>b')).toBe('a^>b');
+    expect(sanitizeArgForCmd('a<b')).toBe('a^<b');
+    expect(sanitizeArgForCmd('a^b')).toBe('a^^b');
+  });
+
+  it('does NOT caret-escape shell operators inside quoted args (spaces present)', () => {
+    expect(sanitizeArgForCmd('read & summarize')).toBe('"read & summarize"');
+    expect(sanitizeArgForCmd('a | b')).toBe('"a | b"');
+    expect(sanitizeArgForCmd('a > b')).toBe('"a > b"');
+    expect(sanitizeArgForCmd('a < b')).toBe('"a < b"');
+    expect(sanitizeArgForCmd('a ^ b')).toBe('"a ^ b"');
+  });
+
+  it('handles combined special chars with spaces (quoted path)', () => {
     expect(sanitizeArgForCmd('echo "hi" & del %TEMP%'))
-      .toBe('echo ""hi"" ^& del %%TEMP%%');
+      .toBe('"echo ""hi"" & del %%TEMP%%"');
   });
 
-  it('handles empty string', () => {
-    expect(sanitizeArgForCmd('')).toBe('');
+  it('handles @ file references with spaces', () => {
+    expect(sanitizeArgForCmd('@src/index.ts explain this'))
+      .toBe('"@src/index.ts explain this"');
+  });
+
+  it('doubles trailing backslashes in quoted args to prevent quote escaping', () => {
+    // "C:\path\" would make CommandLineToArgvW interpret \" as escaped quote
+    expect(sanitizeArgForCmd('C:\\My Folder\\')).toBe('"C:\\My Folder\\\\"');
+    expect(sanitizeArgForCmd('path with trailing\\\\')).toBe('"path with trailing\\\\\\\\"');
+  });
+
+  it('leaves non-trailing backslashes unchanged in quoted args', () => {
+    expect(sanitizeArgForCmd('C:\\My Folder\\file.txt')).toBe('"C:\\My Folder\\file.txt"');
+  });
+
+  it('returns "" for empty string', () => {
+    expect(sanitizeArgForCmd('')).toBe('""');
+  });
+
+  it('replaces newlines with spaces to prevent cmd.exe command injection', () => {
+    expect(sanitizeArgForCmd('line1\nline2')).toBe('"line1 line2"');
+    expect(sanitizeArgForCmd('line1\r\nline2')).toBe('"line1 line2"');
+    expect(sanitizeArgForCmd('a\n\n\nb')).toBe('"a b"');
+  });
+
+  it('strips newlines from single-word args that become multi-word', () => {
+    // "hello\nworld" becomes "hello world" which needs quoting
+    expect(sanitizeArgForCmd('hello\nworld')).toBe('"hello world"');
+  });
+
+  it('caret-escapes parentheses in unquoted args', () => {
+    expect(sanitizeArgForCmd('(a)')).toBe('^(a^)');
+    expect(sanitizeArgForCmd('foo(bar)')).toBe('foo^(bar^)');
   });
 });
