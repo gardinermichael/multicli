@@ -81,16 +81,11 @@ ${prompt_processed}
     prompt_processed = changeModeInstructions;
   }
   
-  // Ensure @ symbols work cross-platform by wrapping in quotes if needed
-  const finalPrompt = prompt_processed.includes('@') && !prompt_processed.startsWith('"')
-    ? `"${prompt_processed}"`
-    : prompt_processed;
-
   const args: string[] = [CLI.FLAGS.MODEL, model];
   if (sandbox) {
     args.push(CLI.FLAGS.SANDBOX);
   }
-  args.push(finalPrompt);
+  args.push(prompt_processed);
 
   return executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
 }

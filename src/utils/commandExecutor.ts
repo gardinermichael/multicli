@@ -4,18 +4,43 @@ import { spawn } from "child_process";
 const isWindows = process.platform === "win32";
 
 /**
- * Sanitize a single argument for safe use with cmd.exe (shell: true on Windows).
- * Uses correct cmd.exe escaping conventions:
- *   - `""` for literal double quotes (cmd.exe convention, not `\"`)
- *   - `%%` for literal percent signs (prevents env variable expansion)
- *   - `^` prefix for cmd.exe operators: & | < > ^
+ * Format a single argument for safe use with cmd.exe (shell: true on Windows).
+ * Ensures the argument survives cmd.exe parsing as one argv entry.
+ *
+ * Rules:
+ * - Empty strings → `""` (otherwise lost entirely)
+ * - Args with whitespace or quotes → wrapped in double quotes
+ *   - Inside quotes: `"` → `""`, `%` → `%%`
+ *   - Trailing backslashes doubled (prevents `\"` escaping the closing quote)
+ *   - Shell operators (&|<>^) are literal inside quotes — no caret needed
+ * - Args without whitespace or quotes → unquoted
+ *   - `%` → `%%`, shell operators get caret-escaped
  */
 export function sanitizeArgForCmd(arg: string): string {
-  return arg
-    .replace(/"/g, '""')               // cmd.exe double-quote escaping
-    .replace(/%/g, '%%')               // prevent %VAR% expansion
-    .replace(/[&|<>^]/g, c => `^${c}`) // caret-escape shell operators
-  ;
+  if (arg === '') return '""';
+
+  // Newlines act as command separators in cmd.exe even inside double quotes.
+  // Replace with spaces to preserve word boundaries safely.
+  const sanitized = arg.replace(/[\r\n]+/g, ' ');
+
+  const needsQuotes = /[\s"]/.test(sanitized);
+
+  if (needsQuotes) {
+    // Inside double quotes: only % and " need escaping.
+    // Shell operators (&|<>^) are treated as literals by cmd.exe inside quotes.
+    // Trailing backslashes must be doubled so they don't escape the closing quote
+    // in the target process's CommandLineToArgvW parser.
+    const escaped = sanitized
+      .replace(/%/g, '%%')
+      .replace(/"/g, '""')
+      .replace(/\\+$/, m => m + m);
+    return `"${escaped}"`;
+  } else {
+    // Unquoted: escape % and caret-escape shell operators (including parentheses)
+    return sanitized
+      .replace(/%/g, '%%')
+      .replace(/[&|<>^()]/g, c => `^${c}`);
+  }
 }
 
 export async function executeCommand(
@@ -84,7 +109,14 @@ export async function executeCommand(
         isResolved = true;
         if (timer) clearTimeout(timer);
         if (code === 0) {
-          resolve(stdout.trim());
+          const output = stdout.trim();
+          if (output || !stderr.trim()) {
+            resolve(output);
+          } else {
+            // Some CLIs (e.g. OpenCode) exit 0 but write errors only to stderr.
+            // Surface the error instead of silently returning an empty string.
+            reject(new Error(`Command produced no output. stderr: ${stderr.trim()}`));
+          }
         } else {
           const errorMessage = stderr.trim() || "Unknown error";
           reject(
