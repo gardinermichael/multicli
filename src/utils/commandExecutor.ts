@@ -3,6 +3,44 @@ import { spawn } from "child_process";
 // Detect Windows platform for shell compatibility
 const isWindows = process.platform === "win32";
 
+function parseEnvInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableErrorMessage(message: string): boolean {
+  const m = message.toLowerCase();
+
+  // Permanent/logic failures should not be retried.
+  if (
+    m.includes("invalid arguments") ||
+    m.includes("unknown tool") ||
+    m.includes("resource_exhausted")
+  ) {
+    return false;
+  }
+
+  return (
+    m.includes("timed out") ||
+    m.includes("etimedout") ||
+    m.includes("econnreset") ||
+    m.includes("econnrefused") ||
+    m.includes("eai_again") ||
+    m.includes("enotfound") ||
+    m.includes("socket hang up") ||
+    m.includes("temporarily unavailable") ||
+    m.includes("rate limit") ||
+    m.includes("429")
+  );
+}
+
 /**
  * Format a single argument for safe use with cmd.exe (shell: true on Windows).
  * Ensures the argument survives cmd.exe parsing as one argv entry.
@@ -49,81 +87,101 @@ export async function executeCommand(
   onProgress?: (newOutput: string) => void,
   timeoutMs?: number,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Use shell: true on Windows to properly execute .cmd files and resolve PATH.
-    // Sanitize args to prevent cmd.exe metacharacter injection.
-    const safeArgs = isWindows ? args.map(sanitizeArgForCmd) : args;
-    const childProcess = spawn(command, safeArgs, {
-      env: process.env,
-      shell: isWindows,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+  const maxAttempts = Math.max(1, parseEnvInt("MULTICLI_RETRY_MAX_ATTEMPTS", 2));
+  const initialDelayMs = parseEnvInt("MULTICLI_RETRY_INITIAL_DELAY_MS", 300);
+  const jitterMs = parseEnvInt("MULTICLI_RETRY_JITTER_MS", 150);
 
-    let stdout = "";
-    let stderr = "";
-    let isResolved = false;
-    let lastReportedLength = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+  const runOnce = () =>
+    new Promise<string>((resolve, reject) => {
+      // Use shell: true on Windows to properly execute .cmd files and resolve PATH.
+      // Sanitize args to prevent cmd.exe metacharacter injection.
+      const safeArgs = isWindows ? args.map(sanitizeArgForCmd) : args;
+      const childProcess = spawn(command, safeArgs, {
+        env: process.env,
+        shell: isWindows,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
 
-    if (timeoutMs && timeoutMs > 0) {
-      timer = setTimeout(() => {
+      let stdout = "";
+      let stderr = "";
+      let isResolved = false;
+      let lastReportedLength = 0;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      if (timeoutMs && timeoutMs > 0) {
+        timer = setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            childProcess.kill('SIGTERM');
+            reject(new Error(`Command timed out after ${timeoutMs}ms`));
+          }
+        }, timeoutMs);
+      }
+
+      childProcess.stdout.on("data", (data) => {
+        if (isResolved) return;
+        stdout += data.toString();
+
+        // Report new content if callback provided
+        if (onProgress && stdout.length > lastReportedLength) {
+          const newContent = stdout.substring(lastReportedLength);
+          lastReportedLength = stdout.length;
+          onProgress(newContent);
+        }
+      });
+
+      childProcess.stderr.on("data", (data) => {
+        if (isResolved) return;
+        stderr += data.toString();
+      });
+
+      childProcess.on("error", (error) => {
         if (!isResolved) {
           isResolved = true;
-          childProcess.kill('SIGTERM');
-          reject(new Error(`Command timed out after ${timeoutMs}ms`));
+          if (timer) clearTimeout(timer);
+          reject(new Error(`Failed to spawn command: ${error.message}`));
         }
-      }, timeoutMs);
-    }
+      });
 
-    childProcess.stdout.on("data", (data) => {
-      if (isResolved) return;
-      stdout += data.toString();
-
-      // Report new content if callback provided
-      if (onProgress && stdout.length > lastReportedLength) {
-        const newContent = stdout.substring(lastReportedLength);
-        lastReportedLength = stdout.length;
-        onProgress(newContent);
-      }
-    });
-
-
-    // CLI level errors
-    childProcess.stderr.on("data", (data) => {
-      if (isResolved) return;
-      stderr += data.toString();
-      // find RESOURCE_EXHAUSTED when gemini quota is exceeded
-      if (stderr.includes("RESOURCE_EXHAUSTED")) {
-        // Quota error details are captured in stderr and propagated via reject
-      }
-    });
-    childProcess.on("error", (error) => {
-      if (!isResolved) {
-        isResolved = true;
-        if (timer) clearTimeout(timer);
-        reject(new Error(`Failed to spawn command: ${error.message}`));
-      }
-    });
-    childProcess.on("close", (code) => {
-      if (!isResolved) {
-        isResolved = true;
-        if (timer) clearTimeout(timer);
-        if (code === 0) {
-          const output = stdout.trim();
-          if (output || !stderr.trim()) {
-            resolve(output);
+      childProcess.on("close", (code) => {
+        if (!isResolved) {
+          isResolved = true;
+          if (timer) clearTimeout(timer);
+          if (code === 0) {
+            const output = stdout.trim();
+            if (output || !stderr.trim()) {
+              resolve(output);
+            } else {
+              // Some CLIs (e.g. OpenCode) exit 0 but write errors only to stderr.
+              // Surface the error instead of silently returning an empty string.
+              reject(new Error(`Command produced no output. stderr: ${stderr.trim()}`));
+            }
           } else {
-            // Some CLIs (e.g. OpenCode) exit 0 but write errors only to stderr.
-            // Surface the error instead of silently returning an empty string.
-            reject(new Error(`Command produced no output. stderr: ${stderr.trim()}`));
+            const errorMessage = stderr.trim() || "Unknown error";
+            reject(new Error(`Command failed with exit code ${code}: ${errorMessage}`));
           }
-        } else {
-          const errorMessage = stderr.trim() || "Unknown error";
-          reject(
-            new Error(`Command failed with exit code ${code}: ${errorMessage}`),
-          );
         }
-      }
+      });
     });
-  });
+
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    try {
+      return await runOnce();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const canRetry = attempt < maxAttempts && isRetryableErrorMessage(message);
+      if (!canRetry) {
+        throw error;
+      }
+
+      const base = initialDelayMs * Math.pow(2, attempt - 1);
+      const jitter = jitterMs > 0 ? Math.floor(Math.random() * (jitterMs + 1)) : 0;
+      const delay = base + jitter;
+      await sleep(delay);
+    }
+  }
+
+  throw new Error("Command failed after retry attempts");
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { spawn } from 'child_process';
 
@@ -39,8 +39,18 @@ function createMockProcess() {
 }
 
 describe('commandExecutor', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env = { ...originalEnv };
+    process.env.MULTICLI_RETRY_MAX_ATTEMPTS = '2';
+    process.env.MULTICLI_RETRY_INITIAL_DELAY_MS = '0';
+    process.env.MULTICLI_RETRY_JITTER_MS = '0';
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
   });
 
   it('resolves with trimmed stdout on exit code 0', async () => {
@@ -116,9 +126,41 @@ describe('commandExecutor', () => {
     await expect(promise).rejects.toThrow('Failed to spawn command');
   });
 
+  it('retries once on transient error and then succeeds', async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    vi.mocked(spawn)
+      .mockReturnValueOnce(first.proc as any)
+      .mockReturnValueOnce(second.proc as any);
+
+    const promise = executeCommand('cmd', []);
+
+    first.emitError(new Error('ETIMEDOUT'));
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
+    second.emitStdout('ok');
+    second.emitClose(0);
+
+    const result = await promise;
+    expect(result).toBe('ok');
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry non-transient failures', async () => {
+    const mock = createMockProcess();
+    vi.mocked(spawn).mockReturnValue(mock.proc as any);
+
+    const promise = executeCommand('bad', ['cmd']);
+    mock.emitStderr('syntax error');
+    mock.emitClose(1);
+
+    await expect(promise).rejects.toThrow('exit code 1: syntax error');
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects with timeout error when timeoutMs elapses', async () => {
     vi.useFakeTimers();
     try {
+      process.env.MULTICLI_RETRY_MAX_ATTEMPTS = '1';
       const mock = createMockProcess();
       // Add kill mock to the process
       (mock.proc as any).kill = vi.fn();
