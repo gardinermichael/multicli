@@ -35,25 +35,27 @@ export interface CliAvailability {
   codex: boolean;
   claude: boolean;
   opencode: boolean;
+  copilot: boolean;
 }
 
 /**
- * Detect which of the four supported CLIs are available on the system.
- * Runs all four checks in parallel for speed.
+ * Detect which supported CLIs are available on the system.
+ * Runs all checks in parallel for speed.
  */
 export async function detectAvailableClis(): Promise<CliAvailability> {
   if (process.env.QA_NO_CLIS === 'true') {
-    return { gemini: false, codex: false, claude: false, opencode: false };
+    return { gemini: false, codex: false, claude: false, opencode: false, copilot: false };
   }
 
-  const [gemini, codex, claude, opencode] = await Promise.all([
+  const [gemini, codex, claude, opencode, copilot] = await Promise.all([
     commandExists(CLI.COMMANDS.GEMINI),
     commandExists(CLI.COMMANDS.CODEX),
     commandExists(CLI.COMMANDS.CLAUDE),
     commandExists(CLI.COMMANDS.OPENCODE),
+    commandExists(CLI.COMMANDS.COPILOT),
   ]);
 
-  const availability: CliAvailability = { gemini, codex, claude, opencode };
+  const availability: CliAvailability = { gemini, codex, claude, opencode, copilot };
 
   return availability;
 }
