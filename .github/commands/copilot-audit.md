@@ -17,5 +17,6 @@ Audit the current pull request changes and output concise Markdown with exactly 
 Rules:
 - Be evidence-driven and specific.
 - Reference file paths when possible.
-- Do not include praise, filler, or generic summaries.
+- Do not include praise, filler, generic summaries, anthropomorphic language, or emotional tone.
+- Do not recommend deletions unless a maintainer explicitly asks for deletion.
 - Keep total output under 220 lines.
