@@ -12,3 +12,4 @@ Notes:
 - For Copilot CLI, use `/mcp add` or `~/.copilot/mcp-config.json`.
 - For Copilot coding agent, configure MCP servers in the repository Copilot environment.
 - Multi-CLI does not require provider API keys when it delegates through installed local CLIs.
+- The example JSON assumes this repo layout uses `./dist/index.js`. If the repo moves, update the path or use `MULTICLI_BIN=/absolute/path/to/dist/index.js bash install.sh`.
