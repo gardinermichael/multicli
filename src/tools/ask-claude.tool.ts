@@ -2,10 +2,11 @@ import { z } from 'zod';
 import { UnifiedTool } from './registry.js';
 import { executeClaudeCLI } from '../utils/claudeExecutor.js';
 import { ERROR_MESSAGES, STATUS_MESSAGES } from '../constants.js';
+import { applyPromptBudget, resolveModel } from '../utils/costGuard.js';
 
 const askClaudeArgsSchema = z.object({
   prompt: z.string().min(1).describe("The question or task for Claude Code. REQUIRED — MUST be a non-empty string. Claude Code has FULL access to the filesystem and can read files itself. Do NOT pre-read or inline file contents — just describe the task and let Claude explore the codebase."),
-  model: z.string().min(1).describe("REQUIRED — you MUST first call List-Claude-Models, review the available model families and their strengths, then select the best model for your task's scope and complexity. It's the law. Empty strings will be rejected."),
+  model: z.string().optional().describe("Optional. Model override. If omitted, Multi-CLI uses a low-cost default model (configurable via MULTICLI_DEFAULT_CLAUDE_MODEL)."),
   permissionMode: z.enum(['default', 'acceptEdits', 'bypassPermissions', 'dontAsk', 'plan']).optional().describe("Optional. Do NOT set unless explicitly needed. Permission mode: 'default' (requires approval), 'acceptEdits' (auto-accepts file edits), 'bypassPermissions' (skips all checks — use with care), 'dontAsk', or 'plan'."),
   maxBudgetUsd: z.number().positive().optional().describe("Optional. Do NOT set unless explicitly needed. Maximum dollar amount to spend on API calls for this request."),
   systemPrompt: z.string().optional().describe("Optional. Do NOT set unless explicitly needed. Override or append a system prompt for this request."),
@@ -26,15 +27,19 @@ export const askClaudeTool: UnifiedTool = {
       throw new Error(ERROR_MESSAGES.NO_PROMPT_PROVIDED);
     }
 
+    const selectedModel = resolveModel('claude', model as string | undefined);
+    const guardedPrompt = applyPromptBudget(prompt as string);
+
     const result = await executeClaudeCLI(
-      prompt as string,
-      model as string,
+      guardedPrompt.prompt,
+      selectedModel,
       permissionMode as string | undefined,
       maxBudgetUsd as number | undefined,
       systemPrompt as string | undefined,
       onProgress
     );
 
-    return `${STATUS_MESSAGES.CLAUDE_RESPONSE}\n${result}`;
+    const budgetNote = guardedPrompt.wasTruncated && guardedPrompt.note ? `${guardedPrompt.note}\n` : '';
+    return `${STATUS_MESSAGES.CLAUDE_RESPONSE}\n${budgetNote}${result}`;
   }
 };

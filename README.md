@@ -285,6 +285,26 @@ export MULTICLI_LOG_STDERR=true
 
 Each tool call emits JSONL telemetry (request id, provider, latency, status, token estimates, error).
 
+**Need hard token/cost guardrails?**
+
+Set these optional env vars before starting Multi-CLI:
+
+```bash
+# Prompt budget guard (default: truncate)
+export MULTICLI_INPUT_BUDGET_MODE=truncate   # truncate | error | off
+export MULTICLI_MAX_INPUT_TOKENS=8000
+
+# Global command timeout (default: 300000ms)
+export MULTICLI_COMMAND_TIMEOUT_MS=180000
+
+# Low-cost defaults when model is omitted
+export MULTICLI_DEFAULT_GEMINI_MODEL=gemini-2.5-flash-lite
+export MULTICLI_DEFAULT_CLAUDE_MODEL=claude-haiku-4-5
+export MULTICLI_DEFAULT_CODEX_MODEL=gpt-5.1-codex-mini
+```
+
+When enabled, Multi-CLI will cap oversized prompts and prefer cheaper default models unless a caller explicitly overrides the model.
+
 ---
 
 ## Development

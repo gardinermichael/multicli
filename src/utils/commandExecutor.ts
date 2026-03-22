@@ -90,6 +90,7 @@ export async function executeCommand(
   const maxAttempts = Math.max(1, parseEnvInt("MULTICLI_RETRY_MAX_ATTEMPTS", 2));
   const initialDelayMs = parseEnvInt("MULTICLI_RETRY_INITIAL_DELAY_MS", 300);
   const jitterMs = parseEnvInt("MULTICLI_RETRY_JITTER_MS", 150);
+  const effectiveTimeoutMs = timeoutMs ?? parseEnvInt("MULTICLI_COMMAND_TIMEOUT_MS", 300000);
 
   const runOnce = () =>
     new Promise<string>((resolve, reject) => {
@@ -108,14 +109,14 @@ export async function executeCommand(
       let lastReportedLength = 0;
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      if (timeoutMs && timeoutMs > 0) {
+      if (effectiveTimeoutMs && effectiveTimeoutMs > 0) {
         timer = setTimeout(() => {
           if (!isResolved) {
             isResolved = true;
             childProcess.kill('SIGTERM');
-            reject(new Error(`Command timed out after ${timeoutMs}ms`));
+            reject(new Error(`Command timed out after ${effectiveTimeoutMs}ms`));
           }
-        }, timeoutMs);
+        }, effectiveTimeoutMs);
       }
 
       childProcess.stdout.on("data", (data) => {

@@ -79,6 +79,7 @@ FAILED=()
 
 if $CLAUDE_FOUND; then
   echo -e "  ${CYAN}→ Installing for Claude Code...${RESET}"
+  claude mcp remove --scope user "$SERVER_NAME" >/dev/null 2>&1 || true
   if claude mcp add --scope user "$SERVER_NAME" -- npx -y "$PACKAGE" 2>/dev/null; then
     INSTALLED+=("Claude Code")
   else
@@ -88,6 +89,7 @@ fi
 
 if $GEMINI_FOUND; then
   echo -e "  ${CYAN}→ Installing for Gemini CLI...${RESET}"
+  gemini mcp remove --scope user "$SERVER_NAME" >/dev/null 2>&1 || true
   if gemini mcp add --scope user "$SERVER_NAME" npx -y "$PACKAGE" 2>/dev/null; then
     INSTALLED+=("Gemini CLI")
   else
@@ -97,6 +99,7 @@ fi
 
 if $CODEX_FOUND; then
   echo -e "  ${CYAN}→ Installing for Codex CLI...${RESET}"
+  codex mcp remove "$SERVER_NAME" >/dev/null 2>&1 || true
   if codex mcp add "$SERVER_NAME" -- npx -y "$PACKAGE" 2>/dev/null; then
     INSTALLED+=("Codex CLI")
   else

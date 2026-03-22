@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { UnifiedTool } from './registry.js';
 import { executeCopilotCLI } from '../utils/copilotExecutor.js';
 import { ERROR_MESSAGES, STATUS_MESSAGES } from '../constants.js';
+import { applyPromptBudget, resolveModel } from '../utils/costGuard.js';
 
 const askCopilotArgsSchema = z.object({
   prompt: z.string().min(1).describe("The question or task for Copilot CLI. REQUIRED — MUST be a non-empty string. Copilot can read/write files and run shell commands when permitted, so describe the task and target paths clearly."),
@@ -25,14 +26,18 @@ export const askCopilotTool: UnifiedTool = {
       throw new Error(ERROR_MESSAGES.NO_PROMPT_PROVIDED);
     }
 
+    const selectedModel = resolveModel('copilot', model as string | undefined) || undefined;
+    const guardedPrompt = applyPromptBudget(prompt as string);
+
     const result = await executeCopilotCLI(
-      prompt as string,
-      model as string | undefined,
+      guardedPrompt.prompt,
+      selectedModel,
       addDirs as string[] | undefined,
       !!allowAllPaths,
       onProgress
     );
 
-    return `${STATUS_MESSAGES.COPILOT_RESPONSE}\n${result}`;
+    const budgetNote = guardedPrompt.wasTruncated && guardedPrompt.note ? `${guardedPrompt.note}\n` : '';
+    return `${STATUS_MESSAGES.COPILOT_RESPONSE}\n${budgetNote}${result}`;
   }
 };

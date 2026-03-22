@@ -11,4 +11,4 @@ References:
 Notes:
 - For Copilot CLI, use `/mcp add` or `~/.copilot/mcp-config.json`.
 - For Copilot coding agent, configure MCP servers in the repository Copilot environment.
-- Keep secrets in repository/copilot environment secrets, not in committed files.
+- Multi-CLI does not require provider API keys when it delegates through installed local CLIs.
