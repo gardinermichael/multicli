@@ -14,7 +14,7 @@ SERVER_NAME="Multi-CLI"
 
 echo ""
 echo -e "${CYAN}${BOLD}  Multi-CLI MCP Installer${RESET}"
-echo -e "${CYAN}  Bridging Claude, Gemini, Codex, and OpenCode${RESET}"
+echo -e "${CYAN}  Bridging Claude, Gemini, Codex, OpenCode, and Copilot${RESET}"
 echo ""
 
 # Detect available CLIs
@@ -22,17 +22,26 @@ CLAUDE_FOUND=false
 GEMINI_FOUND=false
 CODEX_FOUND=false
 OPENCODE_FOUND=false
+COPILOT_FOUND=false
 
 command -v claude   &>/dev/null && CLAUDE_FOUND=true
 command -v gemini   &>/dev/null && GEMINI_FOUND=true
 command -v codex    &>/dev/null && CODEX_FOUND=true
 command -v opencode &>/dev/null && OPENCODE_FOUND=true
+command -v copilot  &>/dev/null && COPILOT_FOUND=true
 
+CLIENT_COUNT=0
 FOUND_COUNT=0
 $CLAUDE_FOUND   && ((FOUND_COUNT++)) || true
 $GEMINI_FOUND   && ((FOUND_COUNT++)) || true
 $CODEX_FOUND    && ((FOUND_COUNT++)) || true
 $OPENCODE_FOUND && ((FOUND_COUNT++)) || true
+$COPILOT_FOUND  && ((FOUND_COUNT++)) || true
+
+$CLAUDE_FOUND   && ((CLIENT_COUNT++)) || true
+$GEMINI_FOUND   && ((CLIENT_COUNT++)) || true
+$CODEX_FOUND    && ((CLIENT_COUNT++)) || true
+$OPENCODE_FOUND && ((CLIENT_COUNT++)) || true
 
 # Bail if nothing is installed
 if [ "$FOUND_COUNT" -eq 0 ]; then
@@ -43,8 +52,23 @@ if [ "$FOUND_COUNT" -eq 0 ]; then
   echo "  • Gemini CLI   →  npm install -g @google/gemini-cli"
   echo "  • Codex CLI    →  npm install -g @openai/codex"
   echo "  • OpenCode     →  curl -fsSL https://opencode.ai/install | bash"
+  echo "  • Copilot CLI  →  npm install -g @github/copilot"
   echo ""
   echo "Install at least two for the full multi-model experience, then re-run this script."
+  echo ""
+  exit 1
+fi
+
+if [ "$CLIENT_COUNT" -eq 0 ]; then
+  echo -e "${YELLOW}${BOLD}Detected Copilot CLI, but no supported MCP host CLI was found.${RESET}"
+  echo ""
+  echo "Copilot is supported as a backend provider, but this installer can only register MCP servers for:"
+  echo "  • Claude Code"
+  echo "  • Gemini CLI"
+  echo "  • Codex CLI"
+  echo "  • OpenCode"
+  echo ""
+  echo "Install one of those CLIs, then rerun this installer."
   echo ""
   exit 1
 fi
@@ -112,6 +136,10 @@ if $OPENCODE_FOUND; then
   fi
 fi
 
+if $COPILOT_FOUND; then
+  echo -e "  ${CYAN}→ Copilot CLI detected (backend provider for Ask-Copilot tools).${RESET}"
+fi
+
 echo ""
 
 # Report failures
@@ -144,6 +172,7 @@ if [ "$FOUND_COUNT" -eq 1 ]; then
   $GEMINI_FOUND   || echo "    • Gemini CLI   →  npm install -g @google/gemini-cli"
   $CODEX_FOUND    || echo "    • Codex CLI    →  npm install -g @openai/codex"
   $OPENCODE_FOUND || echo "    • OpenCode     →  curl -fsSL https://opencode.ai/install | bash"
+  $COPILOT_FOUND  || echo "    • Copilot CLI  →  npm install -g @github/copilot"
   echo ""
 else
   echo -e "${GREEN}${BOLD}  Multi-CLI installed successfully!${RESET}"
@@ -152,6 +181,9 @@ else
   for cli in "${INSTALLED[@]}"; do
     echo -e "  ${GREEN}  ✓ $cli${RESET}"
   done
+  if $COPILOT_FOUND; then
+    echo -e "  ${GREEN}  ✓ Copilot CLI detected (Ask-Copilot backend enabled)${RESET}"
+  fi
   echo ""
   echo -e "  Restart your AI client and the cross-model tools will appear automatically."
   echo -e "  No config. No API keys. No setup. Just works."
