@@ -15,6 +15,7 @@ export const STATUS_MESSAGES = {
   CODEX_RESPONSE: "Codex response:",
   CLAUDE_RESPONSE: "Claude response:",
   OPENCODE_RESPONSE: "OpenCode response:",
+  COPILOT_RESPONSE: "Copilot response:",
   // Timeout prevention messages
   PROCESSING_START: "🔍 Starting analysis (may take 5-15 minutes for large codebases)",
   PROCESSING_CONTINUE: "⏳ Still processing...",
@@ -56,6 +57,7 @@ export const CLI = {
     CODEX: "codex",
     CLAUDE: "claude",
     OPENCODE: "opencode",
+    COPILOT: "copilot",
     ECHO: "echo",
   },
   // Gemini command flags
@@ -96,6 +98,19 @@ export const CLI = {
     SESSION: "-s",
     HELP: "--help",
   },
+  // Copilot flags
+  COPILOT_FLAGS: {
+    MODEL: "--model",
+    PROMPT: "-p",
+    NO_ASK_USER: "--no-ask-user",
+    ALLOW_ALL_TOOLS: "--allow-all-tools",
+    ALLOW_ALL_PATHS: "--allow-all-paths",
+    ADD_DIR: "--add-dir",
+    SILENT: "-s",
+    OUTPUT_FORMAT: "--output-format",
+    JSON: "json",
+    HELP: "--help",
+  },
   // OpenCode subcommands
   OPENCODE_SUBCOMMANDS: {
     RUN: "run",
@@ -123,6 +138,8 @@ export interface ToolArguments {
   permissionMode?: string; // Claude permission mode
   maxBudgetUsd?: number; // Claude max spend
   systemPrompt?: string; // Claude system prompt override
+  addDirs?: string[]; // Copilot additional allowed directories
+  allowAllPaths?: boolean; // Copilot path gate bypass
 
-  [key: string]: string | boolean | number | undefined; // Allow additional properties
+  [key: string]: string | boolean | number | string[] | undefined; // Allow additional properties
 }

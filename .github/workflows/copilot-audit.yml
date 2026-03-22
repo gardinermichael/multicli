@@ -1,0 +1,137 @@
+name: '🔎 Copilot Audit'
+
+on:
+  pull_request:
+    types:
+      - 'opened'
+      - 'reopened'
+      - 'synchronize'
+      - 'ready_for_review'
+  issue_comment:
+    types:
+      - 'created'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to audit'
+        required: false
+        type: 'string'
+
+permissions:
+  contents: 'read'
+  pull-requests: 'write'
+  issues: 'write'
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number || github.run_id }}'
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  audit:
+    runs-on: 'ubuntu-latest'
+    if: |-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        startsWith(github.event.comment.body, '@copilot-cli /audit')
+      )
+    steps:
+      - name: 'Resolve PR number'
+        id: 'resolve_pr'
+        env:
+          INPUT_PR_NUMBER: '${{ github.event.inputs.pr_number }}'
+          EVENT_NAME: '${{ github.event_name }}'
+          EVENT_PR_NUMBER: '${{ github.event.pull_request.number }}'
+          EVENT_ISSUE_NUMBER: '${{ github.event.issue.number }}'
+        run: |-
+          set -euo pipefail
+          PR_NUMBER=''
+          if [ "${EVENT_NAME}" = 'pull_request' ]; then
+            PR_NUMBER="${EVENT_PR_NUMBER}"
+          elif [ -n "${INPUT_PR_NUMBER:-}" ]; then
+            PR_NUMBER="${INPUT_PR_NUMBER}"
+          else
+            PR_NUMBER="${EVENT_ISSUE_NUMBER}"
+          fi
+
+          if [ -z "${PR_NUMBER}" ]; then
+            echo 'Failed to resolve pull request number.' >&2
+            exit 1
+          fi
+
+          echo "pr_number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      - name: 'Checkout repository'
+        uses: 'actions/checkout@v4'
+        with:
+          fetch-depth: 0
+
+      - name: 'Set up Node.js'
+        uses: 'actions/setup-node@v4'
+
+      - name: 'Install Copilot CLI'
+        run: 'npm install -g @github/copilot'
+
+      - name: 'Run Copilot audit'
+        id: 'copilot_audit'
+        env:
+          COPILOT_GITHUB_TOKEN: '${{ secrets.COPILOT_GITHUB_TOKEN }}'
+          GITHUB_TOKEN: '${{ github.token }}'
+          GH_TOKEN: '${{ github.token }}'
+          PR_NUMBER: '${{ steps.resolve_pr.outputs.pr_number }}'
+          REPOSITORY: '${{ github.repository }}'
+        run: |-
+          set -euo pipefail
+          if [ -z "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo 'Missing required secret: COPILOT_GITHUB_TOKEN' >&2
+            exit 1
+          fi
+
+          BASE_SHA="$(gh pr view "${PR_NUMBER}" --repo "${REPOSITORY}" --json baseRefOid --jq '.baseRefOid')"
+          HEAD_SHA="$(gh pr view "${PR_NUMBER}" --repo "${REPOSITORY}" --json headRefOid --jq '.headRefOid')"
+
+          PROMPT="$(cat '.github/commands/copilot-audit.md')"
+          PROMPT+=$'\n\nContext:\n'
+          PROMPT+="Repository: ${REPOSITORY}"$'\n'
+          PROMPT+="PR Number: ${PR_NUMBER}"$'\n'
+          PROMPT+="Base SHA: ${BASE_SHA}"$'\n'
+          PROMPT+="Head SHA: ${HEAD_SHA}"$'\n'
+          PROMPT+=$'\nPlease inspect the git diff between base and head before producing findings.'
+
+          copilot -p "${PROMPT}" \
+            --no-ask-user \
+            --allow-tool='shell(git:*)' \
+            --allow-tool='shell(cat:*)' \
+            --allow-tool='shell(rg:*)' \
+            --allow-tool='shell(gh:*)' \
+            --allow-tool='write' \
+            -s > '/tmp/copilot-audit.md'
+
+      - name: 'Post audit comment'
+        if: |-
+          ${{ always() }}
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          PR_NUMBER: '${{ steps.resolve_pr.outputs.pr_number }}'
+          REPOSITORY: '${{ github.repository }}'
+        run: |-
+          set -euo pipefail
+          if [ ! -s '/tmp/copilot-audit.md' ]; then
+            printf '## 🔎 Copilot Audit\n\nNo audit output was produced.\n' > '/tmp/copilot-audit.md'
+          fi
+
+          {
+            echo '## 🔎 Copilot Audit'
+            echo
+            cat '/tmp/copilot-audit.md'
+          } > '/tmp/copilot-audit-comment.md'
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --body-file '/tmp/copilot-audit-comment.md'

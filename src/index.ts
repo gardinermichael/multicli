@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -18,6 +19,7 @@ import {
   CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { PROTOCOL, ToolArguments } from "./constants.js";
+import { getContextTokensSent, writeTelemetryEvent } from './utils/telemetryLogger.js';
 
 import {
   getToolDefinitions,
@@ -207,6 +209,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
   }
 
   if (toolExists(toolName)) {
+    const requestId = randomUUID();
+    const start = Date.now();
+
     // Check if client requested progress updates
     const progressToken = (request.params as any)._meta?.progressToken;
     
@@ -219,6 +224,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       // Execute the tool using the unified registry
       const result = await executeTool(toolName, args);
+
+      writeTelemetryEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        client: connectedClientName || 'unknown',
+        provider: toolEntry?.category || 'unknown',
+        tool_name: toolName,
+        status: 'success',
+        latency_ms: Date.now() - start,
+        bottleneck: 'provider_latency',
+        context_tokens_sent: getContextTokensSent(args),
+        context_tokens_received: Math.ceil(result.length / 4),
+        retry_count: 0,
+        cache_hit: false,
+        model: typeof args.model === 'string' ? args.model : undefined,
+      });
 
       // Stop progress updates
       await stopProgressUpdates(progressData, true);
@@ -238,6 +259,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+
+      const args: ToolArguments = (request.params.arguments as ToolArguments) || {};
+      writeTelemetryEvent({
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        client: connectedClientName || 'unknown',
+        provider: toolEntry?.category || 'unknown',
+        tool_name: toolName,
+        status: 'error',
+        latency_ms: Date.now() - start,
+        bottleneck: errorMessage.startsWith('Invalid arguments') ? 'validation' : 'unknown',
+        context_tokens_sent: getContextTokensSent(args),
+        context_tokens_received: 0,
+        retry_count: 0,
+        cache_hit: false,
+        model: typeof args.model === 'string' ? args.model : undefined,
+        error: errorMessage,
+      });
 
       return {
         content: [

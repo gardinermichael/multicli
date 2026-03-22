@@ -10,6 +10,8 @@ Multi-CLI requires at least one of the following CLI tools to be installed and a
   1. gemini  - Google Gemini CLI (https://github.com/google-gemini/gemini-cli)
   2. codex   - OpenAI Codex CLI (https://github.com/openai/codex)
   3. claude  - Anthropic Claude Code CLI (https://claude.ai/cli)
+  4. opencode - OpenCode CLI (https://opencode.ai)
+  5. copilot - GitHub Copilot CLI (https://docs.github.com/en/copilot/how-tos/copilot-cli)
 
 Please inform the user that none of the supported CLIs were detected and at least one must be installed for Multi-CLI to function.
 
@@ -19,6 +21,8 @@ To verify a CLI is available, run one of these commands in a terminal:
   which gemini
   which codex
   which claude
+  which opencode
+  which copilot
 
 After installing a CLI, restart the MCP server to pick up the change.
 `;

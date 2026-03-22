@@ -24,7 +24,7 @@ describe('initTools', () => {
 
   it('registers gemini tools when gemini available', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: true, codex: false, claude: false, opencode: false,
+      gemini: true, codex: false, claude: false, opencode: false, copilot: false,
     });
 
     await initTools();
@@ -42,7 +42,7 @@ describe('initTools', () => {
 
   it('registers codex tools when codex available', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: true, claude: false, opencode: false,
+      gemini: false, codex: true, claude: false, opencode: false, copilot: false,
     });
 
     await initTools();
@@ -58,7 +58,7 @@ describe('initTools', () => {
 
   it('registers claude tools when claude available', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: true, opencode: false,
+      gemini: false, codex: false, claude: true, opencode: false, copilot: false,
     });
 
     await initTools();
@@ -74,7 +74,7 @@ describe('initTools', () => {
 
   it('registers opencode tools when opencode available', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: false, opencode: true,
+      gemini: false, codex: false, claude: false, opencode: true, copilot: false,
     });
 
     await initTools();
@@ -90,7 +90,7 @@ describe('initTools', () => {
 
   it('registers tools for multiple available CLIs', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: true, codex: true, claude: false, opencode: false,
+      gemini: true, codex: true, claude: false, opencode: false, copilot: false,
     });
 
     await initTools();
@@ -104,7 +104,7 @@ describe('initTools', () => {
 
   it('registers no tools when no CLIs available', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: false, opencode: false,
+      gemini: false, codex: false, claude: false, opencode: false, copilot: false,
     });
 
     await initTools();
@@ -112,10 +112,27 @@ describe('initTools', () => {
   });
 
   it('returns availability object', async () => {
-    const expected = { gemini: true, codex: false, claude: true, opencode: false };
+    const expected = { gemini: true, codex: false, claude: true, opencode: false, copilot: true };
     vi.mocked(detectAvailableClis).mockResolvedValue(expected);
 
     const result = await initTools();
     expect(result).toEqual(expected);
+  });
+
+  it('registers copilot tools when copilot available', async () => {
+    vi.mocked(detectAvailableClis).mockResolvedValue({
+      gemini: false, codex: false, claude: false, opencode: false, copilot: true,
+    });
+
+    await initTools();
+
+    const names = toolRegistry.map(t => t.name);
+    expect(names).toContain('List-Copilot-Models');
+    expect(names).toContain('Ask-Copilot');
+    expect(names).toContain('Copilot-Help');
+    expect(names).not.toContain('Ask-Gemini');
+    expect(names).not.toContain('Ask-Codex');
+    expect(names).not.toContain('Ask-Claude');
+    expect(names).not.toContain('Ask-OpenCode');
   });
 });

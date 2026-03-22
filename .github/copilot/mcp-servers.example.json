@@ -1,0 +1,11 @@
+{
+  "_comment": "IMPORTANT: This example assumes multicli runs from ./dist/index.js in this repo. If your path differs, update it before use or run install.sh to register the correct command automatically.",
+  "mcpServers": {
+    "multi-cli": {
+      "command": "node",
+      "args": [
+        "./dist/index.js"
+      ]
+    }
+  }
+}

@@ -5,10 +5,11 @@ import {
   ERROR_MESSAGES, 
   STATUS_MESSAGES
 } from '../constants.js';
+import { applyPromptBudget, resolveModel } from '../utils/costGuard.js';
 
 const askGeminiArgsSchema = z.object({
   prompt: z.string().min(1).describe("The question or task for Gemini. REQUIRED — MUST be a non-empty string. Gemini has filesystem access — use @ syntax to reference files (e.g., '@src/index.ts review this'). Do NOT pre-read or inline file contents — just describe the task and reference files with @."),
-  model: z.string().min(1).describe("REQUIRED — you MUST first call List-Gemini-Models, review the available model families and their strengths, then select the best model for your task's scope and complexity. It's the law. Empty strings will be rejected."),
+  model: z.string().optional().describe("Optional. Model override. If omitted, Multi-CLI uses a low-cost default model (configurable via MULTICLI_DEFAULT_GEMINI_MODEL)."),
   sandbox: z.boolean().default(false).describe("Optional. Do NOT set unless explicitly needed. Run in sandbox mode (-s flag) for safely testing code changes in an isolated environment. Defaults to false."),
   changeMode: z.boolean().default(false).describe("Optional. Do NOT set unless explicitly needed. Return structured edit suggestions instead of plain text. Defaults to false."),
   chunkIndex: z.union([z.number(), z.string()]).optional().describe("Internal — do NOT set unless you received a chunked changeMode response. Which chunk to return (1-based)."),
@@ -25,19 +26,21 @@ export const askGeminiTool: UnifiedTool = {
   category: 'gemini',
   execute: async (args, onProgress) => {
     const { prompt, model, sandbox, changeMode, chunkIndex, chunkCacheKey } = args; if (!prompt?.trim()) { throw new Error(ERROR_MESSAGES.NO_PROMPT_PROVIDED); }
+    const selectedModel = resolveModel('gemini', model as string | undefined);
+    const guardedPrompt = applyPromptBudget(prompt as string);
   
     if (changeMode && chunkIndex && chunkCacheKey) {
       return processChangeModeOutput(
         '', // empty for cache...
         chunkIndex as number,
         chunkCacheKey as string,
-        prompt as string
+        guardedPrompt.prompt
       );
     }
     
     const result = await executeGeminiCLI(
-      prompt as string,
-      model as string,
+      guardedPrompt.prompt,
+      selectedModel,
       !!sandbox,
       !!changeMode,
       onProgress
@@ -48,9 +51,10 @@ export const askGeminiTool: UnifiedTool = {
         result,
         args.chunkIndex as number | undefined,
         undefined,
-        prompt as string
+        guardedPrompt.prompt
       );
     }
-    return `${STATUS_MESSAGES.GEMINI_RESPONSE}\n${result}`; // changeMode false
+    const budgetNote = guardedPrompt.wasTruncated && guardedPrompt.note ? `${guardedPrompt.note}\n` : '';
+    return `${STATUS_MESSAGES.GEMINI_RESPONSE}\n${budgetNote}${result}`; // changeMode false
   }
 };
